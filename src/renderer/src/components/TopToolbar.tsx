@@ -12,7 +12,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
   const [projects, setProjects] = useState<ProjectConfig[]>([])
   const [activeProject, setActiveProject] = useState<ProjectConfig | null>(null)
   const [upstreamBranch, setUpstreamBranch] = useState<string>('main')
-  const [workingBranch, setWorkingBranch] = useState<string>('translate-zh')
+  const [workingBranch, setWorkingBranch] = useState<string>('')
   const [isSyncing, setIsSyncing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [branches, setBranches] = useState<{ local: string[], remote: string[] }>({ local: [], remote: [] })
@@ -262,9 +262,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
               ))}
               {branches.local.length === 0 && (
                 <>
-                  <option value="translate-zh">translate-zh</option>
-                  <option value="translate-zh-cn">translate-zh-cn</option>
-                  <option value="docs-zh">docs-zh</option>
+                  <option value="main">main</option>
+                  <option value="master">master</option>
+                  <option value="develop">develop</option>
                 </>
               )}
             </>

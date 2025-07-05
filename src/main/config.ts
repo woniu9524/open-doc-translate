@@ -117,13 +117,18 @@ export class ConfigManager {
                                  branches.remote.includes('master') ? 'master' : 
                                  branches.remote[0] || 'main'
 
+    // 选择合适的默认工作分支
+    const defaultWorkingBranch = branches.local.includes('main') ? 'main' : 
+                                branches.local.includes('master') ? 'master' : 
+                                branches.local[0] || 'main'
+
     const newProject: ProjectConfig = {
       name: projectName,
       path: projectPath,
       originUrl,
       upstreamUrl,
       upstreamBranch: defaultUpstreamBranch,
-      workingBranch: 'translate-zh',
+      workingBranch: defaultWorkingBranch,
       watchDirectories: ['docs', 'guides'],
       fileTypes: ['.md', '.mdx', '.txt']
     }

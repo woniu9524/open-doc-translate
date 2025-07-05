@@ -392,16 +392,17 @@ export class FileManager {
         original = '无法读取上游分支的文件内容'
       }
 
-      // 读取本地翻译文件
+      // 读取工作分支的翻译文件
       let translated = ''
       try {
-        translated = await this.readFileContent(projectPath, filePath)
+        // 首先尝试从工作分支读取
+        translated = await this.readFileContent(projectPath, filePath, workingBranch)
       } catch (error) {
-        // 如果本地文件不存在，尝试从工作分支读取
+        // 如果工作分支不存在该文件，尝试从本地文件系统读取
         try {
-          translated = await this.readFileContent(projectPath, filePath, workingBranch)
-        } catch (branchError) {
-          console.log('本地和工作分支都没有翻译文件，这是正常的未翻译状态')
+          translated = await this.readFileContent(projectPath, filePath)
+        } catch (localError) {
+          console.log('工作分支和本地都没有翻译文件，这是正常的未翻译状态')
           translated = ''
         }
       }
