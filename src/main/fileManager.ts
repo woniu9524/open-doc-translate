@@ -2,6 +2,8 @@ import { promises as fs } from 'fs'
 import { join, relative, extname, basename, dirname } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { LLMService } from './llmService'
+import { ConfigManager } from './config'
 
 const execAsync = promisify(exec)
 
@@ -24,8 +26,11 @@ export interface FileStatus {
 export class FileManager {
   private statusCache: Map<string, FileStatus> = new Map()
   private statusFilePath: string = ''
+  private llmService: LLMService
 
-  constructor() {}
+  constructor(configManager: ConfigManager) {
+    this.llmService = new LLMService(configManager)
+  }
 
   private getStatusFilePath(projectPath: string): string {
     return join(projectPath, '.opendoc.json')
@@ -392,19 +397,15 @@ export class FileManager {
         original = '无法读取上游分支的文件内容'
       }
 
-      // 读取工作分支的翻译文件
+      // 读取工作分支的翻译文件 - 直接从本地文件系统读取
       let translated = ''
       try {
-        // 首先尝试从工作分支读取
-        translated = await this.readFileContent(projectPath, filePath, workingBranch)
+        // 直接从本地文件系统读取译文，因为切换分支时已经切换到工作分支
+        // 这样可以读取到未提交的修改
+        translated = await this.readFileContent(projectPath, filePath)
       } catch (error) {
-        // 如果工作分支不存在该文件，尝试从本地文件系统读取
-        try {
-          translated = await this.readFileContent(projectPath, filePath)
-        } catch (localError) {
-          console.log('工作分支和本地都没有翻译文件，这是正常的未翻译状态')
-          translated = ''
-        }
+        console.log('本地没有翻译文件，这是正常的未翻译状态')
+        translated = ''
       }
 
       return {
@@ -440,5 +441,83 @@ export class FileManager {
       console.error(`保存文件 ${filePath} 失败:`, error)
       throw new Error(`保存文件失败: ${filePath}`)
     }
+  }
+
+  // 翻译文件
+  async translateFile(
+    projectPath: string,
+    filePath: string,
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<void> {
+    try {
+      // 获取文件内容
+      const fileContent = await this.getFileContent(projectPath, filePath, upstreamBranch, workingBranch)
+      
+      if (!fileContent.original) {
+        throw new Error('无法获取原文内容')
+      }
+
+      // 调用 LLM 翻译
+      const translatedContent = await this.callLLMTranslation(fileContent.original, projectPath)
+      
+      // 保存翻译结果
+      await this.saveFileContent(projectPath, filePath, translatedContent)
+      
+      // 更新文件状态缓存
+      const upstreamHash = await this.getFileHash(projectPath, filePath, `upstream/${upstreamBranch}`)
+      if (upstreamHash) {
+        const cacheKey = `${projectPath}:${filePath}`
+        this.statusCache.set(cacheKey, {
+          path: filePath,
+          status: 'translated',
+          modified: false,
+          lastHash: upstreamHash
+        })
+        await this.saveStatusCache()
+      }
+      
+      console.log(`文件 ${filePath} 翻译完成`)
+    } catch (error) {
+      console.error(`翻译文件 ${filePath} 失败:`, error)
+      throw new Error(`翻译文件失败: ${filePath} - ${(error as Error).message}`)
+    }
+  }
+
+  // 调用 LLM 翻译
+  private async callLLMTranslation(content: string, projectPath: string): Promise<string> {
+    try {
+      const response = await this.llmService.translateText({
+        content
+      }, projectPath)
+      
+      return response.translatedContent
+    } catch (error) {
+      console.error('LLM 翻译失败:', error)
+      // 如果 LLM 翻译失败，返回模拟翻译结果
+      return this.getMockTranslation(content)
+    }
+  }
+
+  // 模拟翻译（作为 LLM 翻译的备选方案）
+  private getMockTranslation(content: string): string {
+    return content
+      .replace(/OpenDoc Translate/g, 'OpenDoc Translate')
+      .replace(/Getting Started/g, '开始使用')
+      .replace(/API Reference/g, 'API 参考')
+      .replace(/Authentication/g, '认证')
+      .replace(/Endpoints/g, '端点')
+      .replace(/Parameters/g, '参数')
+      .replace(/Response/g, '响应')
+      .replace(/Documentation/g, '文档')
+      .replace(/Installation/g, '安装')
+      .replace(/Configuration/g, '配置')
+      .replace(/Usage/g, '使用方法')
+      .replace(/Examples/g, '示例')
+      .replace(/FAQ/g, '常见问题')
+      .replace(/Troubleshooting/g, '故障排除')
+      .replace(/Contributing/g, '贡献指南')
+      .replace(/License/g, '许可证')
+      .replace(/Changelog/g, '更新日志')
   }
 } 

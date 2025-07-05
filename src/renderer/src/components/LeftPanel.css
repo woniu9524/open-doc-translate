@@ -65,20 +65,48 @@
 .action-buttons {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   margin-top: 8px;
 }
 
-.refresh-btn {
-  min-width: 60px;
+.translate-btn {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
 }
 
-.refresh-btn:disabled {
-  opacity: 0.6;
+.translate-btn:hover {
+  background-color: #2563eb;
+}
+
+.translate-btn:disabled {
+  background-color: #9ca3af;
   cursor: not-allowed;
 }
 
-.translate-btn {
-  flex: 1;
+.refresh-btn {
+  background-color: #6b7280;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.refresh-btn:hover {
+  background-color: #4b5563;
+}
+
+.refresh-btn:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
 }
 
 .file-tree {

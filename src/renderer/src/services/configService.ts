@@ -51,6 +51,10 @@ export class ConfigService {
     await window.api.config.fetchUpstream(projectPath)
   }
 
+  async checkoutBranch(projectPath: string, branch: string): Promise<void> {
+    await window.api.config.checkoutBranch(projectPath, branch)
+  }
+
   getConfig(): AppConfig | null {
     return this.config
   }

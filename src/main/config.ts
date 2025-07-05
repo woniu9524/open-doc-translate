@@ -184,6 +184,17 @@ export class ConfigManager {
     }
   }
 
+  async checkoutBranch(projectPath: string, branch: string): Promise<void> {
+    try {
+      // 执行 git checkout 命令切换分支
+      await execAsync(`git checkout ${branch}`, { cwd: projectPath })
+      console.log(`成功切换到分支: ${branch}`)
+    } catch (error) {
+      console.error(`切换分支失败: ${branch}`, error)
+      throw new Error(`切换分支失败: ${branch} - ${(error as Error).message}`)
+    }
+  }
+
   getConfig(): AppConfig {
     return this.config
   }

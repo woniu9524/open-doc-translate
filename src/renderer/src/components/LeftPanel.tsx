@@ -2,6 +2,7 @@ import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'rea
 import { configService } from '../services/configService'
 import { fileService, FileItem } from '../services/fileService'
 import { AppConfig, ProjectConfig } from '../types/config'
+import TranslationDialog from './TranslationDialog'
 import './LeftPanel.css'
 
 interface LeftPanelProps {
@@ -25,6 +26,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
 }, ref) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'translated' | 'outdated' | 'untranslated'>('all')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['docs', 'guides']))
+  const [isTranslationDialogOpen, setIsTranslationDialogOpen] = useState(false)
   
   // 配置相关状态
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -219,6 +221,18 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     }
   }
 
+  const handleOpenTranslationDialog = () => {
+    setIsTranslationDialogOpen(true)
+  }
+
+  const handleCloseTranslationDialog = () => {
+    setIsTranslationDialogOpen(false)
+    // 翻译完成后刷新文件树
+    if (activeProject) {
+      loadFileTree(activeProject)
+    }
+  }
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'translated': return '🟢'
@@ -335,6 +349,13 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
             disabled={isLoadingFiles || !activeProject}
           >
             {isLoadingFiles ? '刷新中...' : '刷新'}
+          </button>
+          <button 
+            className="btn btn-primary btn-sm translate-btn"
+            onClick={handleOpenTranslationDialog}
+            disabled={!activeProject || isLoadingFiles}
+          >
+            📝 批量翻译
           </button>
           {selectedFiles.length > 0 && (
             <button 
@@ -556,6 +577,16 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         {activeTab === 'git' && renderGit()}
         {activeTab === 'settings' && renderSettings()}
       </div>
+
+      {/* 翻译对话框 */}
+      <TranslationDialog
+        isOpen={isTranslationDialogOpen}
+        onClose={handleCloseTranslationDialog}
+        files={files}
+        projectPath={activeProject?.path || ''}
+        upstreamBranch={activeProject?.upstreamBranch || 'main'}
+        workingBranch={activeProject?.workingBranch || 'main'}
+      />
     </div>
   )
 })

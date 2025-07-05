@@ -89,6 +89,20 @@ export class FileService {
   ): Promise<void> {
     await window.api.files.saveFileContent(projectPath, filePath, content)
   }
+
+  async translateFile(
+    projectPath: string,
+    filePath: string,
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<void> {
+    await window.api.files.translateFile(
+      projectPath,
+      filePath,
+      upstreamBranch,
+      workingBranch
+    )
+  }
 }
 
 // 创建单例实例

@@ -133,11 +133,29 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
     setWorkingBranch(branch)
     if (activeProject) {
       try {
+        // 先切换Git分支
+        await configService.checkoutBranch(activeProject.path, branch)
+        
+        // 然后更新配置
         await configService.updateProject(activeProject.path, {
           workingBranch: branch
         })
+        
+        // 通知文件树刷新
+        if (onFileTreeRefresh) {
+          onFileTreeRefresh()
+        }
+        
+        console.log(`成功切换到分支: ${branch}`)
       } catch (error) {
-        console.error('更新工作分支失败:', error)
+        console.error('切换工作分支失败:', error)
+        alert('切换工作分支失败: ' + (error as Error).message)
+        
+        // 如果切换失败，恢复到之前的分支选择
+        const project = activeProject
+        if (project) {
+          setWorkingBranch(project.workingBranch)
+        }
       }
     }
   }

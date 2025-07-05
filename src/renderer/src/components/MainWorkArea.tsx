@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { fileService, FileContent } from '../services/fileService'
 import { configService } from '../services/configService'
+import { llmService } from '../services/llmService'
 import './MainWorkArea.css'
 
 interface MainWorkAreaProps {
@@ -66,24 +67,46 @@ const MainWorkArea: React.FC<MainWorkAreaProps> = ({ activeFile, onFileChange })
     
     setIsTranslating(true)
     try {
-      // TODO: 实现真实的LLM翻译功能
-      // 这里暂时使用模拟翻译
-      setTimeout(() => {
-        const translated = fileContent.original
-          .replace(/OpenDoc Translate/g, 'OpenDoc Translate')
-          .replace(/Getting Started/g, '开始使用')
-          .replace(/API Reference/g, 'API 参考')
-          .replace(/Authentication/g, '认证')
-          .replace(/Endpoints/g, '端点')
-          .replace(/Parameters/g, '参数')
-          .replace(/Response/g, '响应')
-        
-        setTranslatedContent(translated)
-        setHasUnsavedChanges(true)
-        setIsTranslating(false)
-      }, 2000)
+      const config = configService.getConfig()
+      const activeProject = config?.projects.find(p => p.path === config.activeProjectPath)
+      
+      if (!activeProject) {
+        throw new Error('未找到活动项目')
+      }
+
+      // 检查 LLM 配置
+      if (!config?.llmConfig?.apiKey) {
+        // 如果没有 API Key，使用模拟翻译
+        setTimeout(() => {
+          const translated = fileContent.original
+            .replace(/OpenDoc Translate/g, 'OpenDoc Translate')
+            .replace(/Getting Started/g, '开始使用')
+            .replace(/API Reference/g, 'API 参考')
+            .replace(/Authentication/g, '认证')
+            .replace(/Endpoints/g, '端点')
+            .replace(/Parameters/g, '参数')
+            .replace(/Response/g, '响应')
+          
+          setTranslatedContent(translated)
+          setHasUnsavedChanges(true)
+          setIsTranslating(false)
+        }, 2000)
+        return
+      }
+
+      // 使用真实的 LLM 翻译
+      const prompt = activeProject.customPrompt || config.globalPrompt
+      const response = await llmService.translateText({
+        content: fileContent.original,
+        prompt
+      })
+      
+      setTranslatedContent(response.translatedContent)
+      setHasUnsavedChanges(true)
     } catch (error) {
       console.error('翻译失败:', error)
+      alert('翻译失败: ' + (error as Error).message)
+    } finally {
       setIsTranslating(false)
     }
   }

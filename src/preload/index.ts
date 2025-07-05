@@ -15,7 +15,8 @@ const api = {
       ipcRenderer.invoke('config:set-active-project', projectPath),
     getActiveProject: () => ipcRenderer.invoke('config:get-active-project'),
     getBranches: (projectPath: string) => ipcRenderer.invoke('config:get-branches', projectPath),
-    fetchUpstream: (projectPath: string) => ipcRenderer.invoke('config:fetch-upstream', projectPath)
+    fetchUpstream: (projectPath: string) => ipcRenderer.invoke('config:fetch-upstream', projectPath),
+    checkoutBranch: (projectPath: string, branch: string) => ipcRenderer.invoke('config:checkout-branch', projectPath, branch)
   },
   files: {
     getFileTree: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => 
@@ -27,7 +28,9 @@ const api = {
     getFileContent: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => 
       ipcRenderer.invoke('files:get-file-content', projectPath, filePath, upstreamBranch, workingBranch),
     saveFileContent: (projectPath: string, filePath: string, content: string) => 
-      ipcRenderer.invoke('files:save-file-content', projectPath, filePath, content)
+      ipcRenderer.invoke('files:save-file-content', projectPath, filePath, content),
+    translateFile: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => 
+      ipcRenderer.invoke('files:translate-file', projectPath, filePath, upstreamBranch, workingBranch)
   }
 }
 

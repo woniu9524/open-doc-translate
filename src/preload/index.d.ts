@@ -15,6 +15,7 @@ declare global {
         getActiveProject: () => Promise<ProjectConfig | undefined>
         getBranches: (projectPath: string) => Promise<{ local: string[], remote: string[] }>
         fetchUpstream: (projectPath: string) => Promise<boolean>
+        checkoutBranch: (projectPath: string, branch: string) => Promise<boolean>
       }
       files: {
         getFileTree: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => Promise<FileItem[]>
@@ -22,6 +23,7 @@ declare global {
         syncFileStatuses: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => Promise<void>
         getFileContent: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<FileContent>
         saveFileContent: (projectPath: string, filePath: string, content: string) => Promise<void>
+        translateFile: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<void>
       }
     }
   }

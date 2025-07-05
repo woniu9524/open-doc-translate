@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
   await configManager.loadConfig()
 
   // 初始化文件管理器
-  fileManager = new FileManager()
+  fileManager = new FileManager(configManager)
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -103,6 +103,11 @@ app.whenReady().then(async () => {
     return true
   })
 
+  ipcMain.handle('config:checkout-branch', async (_, projectPath, branch) => {
+    await configManager.checkoutBranch(projectPath, branch)
+    return true
+  })
+
   // IPC handlers for file management
   ipcMain.handle('files:get-file-tree', async (_, projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch) => {
     return await fileManager.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
@@ -123,6 +128,11 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('files:save-file-content', async (_, projectPath, filePath, content) => {
     await fileManager.saveFileContent(projectPath, filePath, content)
+    return true
+  })
+
+  ipcMain.handle('files:translate-file', async (_, projectPath, filePath, upstreamBranch, workingBranch) => {
+    await fileManager.translateFile(projectPath, filePath, upstreamBranch, workingBranch)
     return true
   })
 
