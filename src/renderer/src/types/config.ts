@@ -18,6 +18,8 @@ export interface AppConfig {
     apiKey: string
     model: string
     baseUrl?: string
+    temperature?: number
+    maxTokens?: number
   }
   globalPrompt: string
 }

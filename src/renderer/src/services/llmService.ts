@@ -4,6 +4,8 @@ export interface LLMConfig {
   apiKey: string
   model: string
   baseUrl?: string
+  temperature?: number
+  maxTokens?: number
 }
 
 export interface TranslationRequest {
@@ -61,8 +63,8 @@ export class LLMService {
         body: JSON.stringify({
           model: config.model,
           messages,
-          temperature: 0.3,
-          max_tokens: 4000
+          temperature: config.temperature || 0.3,
+          max_tokens: config.maxTokens || 4000
         })
       })
 

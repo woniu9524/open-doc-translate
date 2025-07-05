@@ -35,6 +35,8 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     apiKey: '',
     model: 'gpt-4',
     baseUrl: '',
+    temperature: 0.3,
+    maxTokens: 4000,
     globalPrompt: '',
     customPrompt: '',
     originUrl: '',
@@ -114,6 +116,8 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
             apiKey: loadedConfig.llmConfig.apiKey,
             model: loadedConfig.llmConfig.model,
             baseUrl: loadedConfig.llmConfig.baseUrl || '',
+            temperature: loadedConfig.llmConfig.temperature || 0.3,
+            maxTokens: loadedConfig.llmConfig.maxTokens || 4000,
             globalPrompt: loadedConfig.globalPrompt
           }))
         }
@@ -132,6 +136,8 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         apiKey: newConfig.llmConfig.apiKey,
         model: newConfig.llmConfig.model,
         baseUrl: newConfig.llmConfig.baseUrl || '',
+        temperature: newConfig.llmConfig.temperature || 0.3,
+        maxTokens: newConfig.llmConfig.maxTokens || 4000,
         globalPrompt: newConfig.globalPrompt
       }))
       
@@ -179,7 +185,9 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         llmConfig: {
           apiKey: settingsForm.apiKey,
           model: settingsForm.model,
-          baseUrl: settingsForm.baseUrl
+          baseUrl: settingsForm.baseUrl,
+          temperature: settingsForm.temperature,
+          maxTokens: settingsForm.maxTokens
         },
         globalPrompt: settingsForm.globalPrompt
       }
@@ -211,7 +219,9 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   const handleFormChange = (field: keyof typeof settingsForm, value: string) => {
     setSettingsForm(prev => ({
       ...prev,
-      [field]: value
+      [field]: field === 'temperature' ? parseFloat(value) || 0.3 : 
+               field === 'maxTokens' ? parseInt(value) || 32000 : 
+               value
     }))
   }
 
@@ -454,6 +464,37 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
             value={settingsForm.baseUrl}
             onChange={(e) => handleFormChange('baseUrl', e.target.value)}
           />
+        </div>
+        <div className="setting-item">
+          <label>Temperature:</label>
+          <input 
+            type="number" 
+            className="input"
+            placeholder="0.3"
+            min="0"
+            max="2"
+            step="0.1"
+            value={settingsForm.temperature}
+            onChange={(e) => handleFormChange('temperature', e.target.value)}
+          />
+          <small className="help-text">
+            控制输出的随机性，0-2之间，值越小输出越确定
+          </small>
+        </div>
+        <div className="setting-item">
+          <label>Max Tokens:</label>
+          <input 
+            type="number" 
+            className="input"
+            placeholder="4000"
+            min="1"
+            max="32000"
+            value={settingsForm.maxTokens}
+            onChange={(e) => handleFormChange('maxTokens', e.target.value)}
+          />
+          <small className="help-text">
+            最大输出token数量，控制回复长度
+          </small>
         </div>
       </div>
 
