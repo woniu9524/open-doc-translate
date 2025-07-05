@@ -24,6 +24,8 @@ declare global {
         getFileContent: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<FileContent>
         saveFileContent: (projectPath: string, filePath: string, content: string) => Promise<void>
         translateFile: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<void>
+        clearProjectCache: (projectPath: string) => Promise<void>
+        clearBranchCache: (projectPath: string, workingBranch: string, upstreamBranch: string) => Promise<void>
       }
     }
   }

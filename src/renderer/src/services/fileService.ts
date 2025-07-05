@@ -103,6 +103,18 @@ export class FileService {
       workingBranch
     )
   }
+
+  async clearProjectCache(projectPath: string): Promise<void> {
+    await window.api.files.clearProjectCache(projectPath)
+  }
+
+  async clearBranchCache(
+    projectPath: string,
+    workingBranch: string,
+    upstreamBranch: string
+  ): Promise<void> {
+    await window.api.files.clearBranchCache(projectPath, workingBranch, upstreamBranch)
+  }
 }
 
 // 创建单例实例

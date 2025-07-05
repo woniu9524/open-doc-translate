@@ -27,6 +27,7 @@ export class FileManager {
   private statusCache: Map<string, FileStatus> = new Map()
   private statusFilePath: string = ''
   private llmService: LLMService
+  private upstreamHashCache: Map<string, Map<string, string>> = new Map() // 缓存上游分支的文件哈希
 
   constructor(configManager: ConfigManager) {
     this.llmService = new LLMService(configManager)
@@ -38,19 +39,24 @@ export class FileManager {
 
   // 加载文件状态缓存
   private async loadStatusCache(projectPath: string, workingBranch: string): Promise<void> {
-    this.statusFilePath = this.getStatusFilePath(projectPath, workingBranch)
+    const statusFilePath = this.getStatusFilePath(projectPath, workingBranch)
+    
     try {
-      const statusData = await fs.readFile(this.statusFilePath, 'utf-8')
-      const statusObj = JSON.parse(statusData)
-      this.statusCache.clear()
-      Object.entries(statusObj).forEach(([path, status]) => {
-        // 重新构建缓存key，包含工作分支信息
-        const cacheKey = `${projectPath}:${workingBranch}:${path}`
-        this.statusCache.set(cacheKey, status as FileStatus)
-      })
+      if (await fs.access(statusFilePath).then(() => true).catch(() => false)) {
+        const data = await fs.readFile(statusFilePath, 'utf-8')
+        const statusData = JSON.parse(data)
+        
+        // 清空当前缓存
+        this.statusCache.clear()
+        
+        // 加载缓存数据
+        for (const [path, status] of Object.entries(statusData)) {
+          const cacheKey = `${projectPath}:${workingBranch}:${path}`
+          this.statusCache.set(cacheKey, status as FileStatus)
+        }
+      }
     } catch (error) {
-      console.log(`分支 ${workingBranch} 的状态文件不存在或损坏，使用空缓存`)
-      this.statusCache.clear()
+      console.error('加载状态缓存失败:', error)
     }
   }
 
@@ -327,6 +333,178 @@ export class FileManager {
     return tree
   }
 
+  // 获取上游哈希缓存的key
+  private getUpstreamCacheKey(projectPath: string, upstreamBranch: string): string {
+    return `${projectPath}:upstream/${upstreamBranch}`
+  }
+
+  // 清除上游哈希缓存
+  private clearUpstreamHashCache(projectPath: string, upstreamBranch: string): void {
+    const cacheKey = this.getUpstreamCacheKey(projectPath, upstreamBranch)
+    this.upstreamHashCache.delete(cacheKey)
+  }
+
+  // 清除指定项目的所有缓存
+  public clearProjectCache(projectPath: string): void {
+    // 清除状态缓存
+    const keysToDelete = Array.from(this.statusCache.keys()).filter(key => key.startsWith(`${projectPath}:`))
+    keysToDelete.forEach(key => this.statusCache.delete(key))
+    
+    // 清除上游哈希缓存
+    const hashKeysToDelete = Array.from(this.upstreamHashCache.keys()).filter(key => key.startsWith(`${projectPath}:`))
+    hashKeysToDelete.forEach(key => this.upstreamHashCache.delete(key))
+    
+    console.log(`清除项目 ${projectPath} 的所有缓存`)
+  }
+
+  // 清除指定分支的缓存
+  public clearBranchCache(projectPath: string, workingBranch: string, upstreamBranch: string): void {
+    // 清理状态缓存
+    const branchPrefix = `${projectPath}:${workingBranch}:`
+    const keysToDelete = Array.from(this.statusCache.keys()).filter(key => key.startsWith(branchPrefix))
+    keysToDelete.forEach(key => this.statusCache.delete(key))
+    
+    // 清理上游哈希缓存
+    this.clearUpstreamHashCache(projectPath, upstreamBranch)
+    
+    console.log(`清除项目 ${projectPath} 分支 ${workingBranch}/${upstreamBranch} 的缓存`)
+  }
+
+  // 批量获取上游分支所有文件的哈希值（带缓存）
+  private async getBatchUpstreamHashes(
+    projectPath: string,
+    watchDirectories: string[],
+    upstreamBranch: string
+  ): Promise<Map<string, string>> {
+    const cacheKey = this.getUpstreamCacheKey(projectPath, upstreamBranch)
+    
+    if (this.upstreamHashCache.has(cacheKey)) {
+      return this.upstreamHashCache.get(cacheKey)!
+    }
+
+    const hashMap = new Map<string, string>()
+    
+    try {
+      // 使用 git ls-tree 批量获取所有文件的 blob 哈希
+      const dirArgs = watchDirectories.map(dir => `"${dir.replace(/\\/g, '/')}"`).join(' ')
+      const { stdout } = await execAsync(
+        `git ls-tree -r upstream/${upstreamBranch} -- ${dirArgs}`,
+        { cwd: projectPath }
+      )
+      
+      // 解析 git ls-tree 输出
+      const lines = stdout.trim().split('\n').filter(line => line.trim())
+      
+      for (const line of lines) {
+        const match = line.match(/^(\d+)\s+(\w+)\s+([a-f0-9]+)\s+(.+)$/)
+        if (match) {
+          const [, , type, blobHash, filePath] = match
+          if (type === 'blob') {
+            // 标准化路径格式
+            const normalizedPath = filePath.replace(/\//g, '\\')
+            hashMap.set(normalizedPath, blobHash)
+          }
+        }
+      }
+      
+      // 缓存结果
+      this.upstreamHashCache.set(cacheKey, hashMap)
+      
+      return hashMap
+    } catch (error) {
+      console.error('批量获取上游哈希失败:', error)
+      return hashMap
+    }
+  }
+
+  // 获取文件的blob哈希值
+  private async getFileBlobHash(projectPath: string, filePath: string, branch: string): Promise<string | null> {
+    try {
+      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
+      const normalizedPath = filePath.replace(/\\/g, '/')
+      const { stdout } = await execAsync(
+        `git ls-tree ${branch} "${normalizedPath}"`,
+        { cwd: projectPath }
+      )
+      
+      const hashMatch = stdout.match(/^[0-9]+ blob ([a-f0-9]+)/)
+      return hashMatch ? hashMatch[1] : null
+    } catch (error) {
+      console.error(`获取文件 ${filePath} 的blob hash失败:`, error)
+      return null
+    }
+  }
+
+  // 批量获取所有文件的修改状态
+  private async getBatchModifiedStatus(
+    projectPath: string
+  ): Promise<Map<string, boolean>> {
+    const modifiedMap = new Map<string, boolean>()
+    
+    try {
+      // 使用 git status --porcelain 获取所有修改的文件
+      const { stdout } = await execAsync('git status --porcelain', { cwd: projectPath })
+      
+      const lines = stdout.trim().split('\n').filter(line => line.trim())
+      
+      for (const line of lines) {
+        // 解析 git status --porcelain 输出格式
+        const match = line.match(/^(..)(.+)$/)
+        if (match) {
+          const [, status, filePath] = match
+          // 标准化路径格式
+          const normalizedPath = filePath.trim().replace(/\//g, '\\')
+          modifiedMap.set(normalizedPath, true)
+        }
+      }
+      
+      return modifiedMap
+    } catch (error) {
+      console.error('批量获取修改状态失败:', error)
+      return modifiedMap
+    }
+  }
+
+  // 批量计算文件状态
+  private async batchCalculateFileStatus(
+    projectPath: string,
+    allFiles: string[],
+    upstreamBranch: string,
+    workingBranch: string,
+    upstreamHashMap: Map<string, string>,
+    modifiedMap: Map<string, boolean>
+  ): Promise<Map<string, FileStatus>> {
+    const statusMap = new Map<string, FileStatus>()
+    
+    for (const filePath of allFiles) {
+      const cacheKey = `${projectPath}:${workingBranch}:${filePath}`
+      const cachedStatus = this.statusCache.get(cacheKey)
+      const upstreamHash = upstreamHashMap.get(filePath)
+      const isModified = modifiedMap.get(filePath) || false
+      
+      let status: 'translated' | 'outdated' | 'untranslated' = 'untranslated'
+      
+      if (cachedStatus && upstreamHash) {
+        if (cachedStatus.lastHash === upstreamHash) {
+          status = 'translated'
+        } else {
+          status = 'outdated'
+        }
+      } else if (cachedStatus) {
+        status = cachedStatus.status
+      }
+      
+      statusMap.set(filePath, {
+        path: filePath,
+        status,
+        modified: isModified,
+        lastHash: upstreamHash
+      })
+    }
+    
+    return statusMap
+  }
+
   // 获取文件树
   async getFileTree(
     projectPath: string,
@@ -349,24 +527,30 @@ export class FileManager {
 
     console.log(`扫描到 ${allFiles.length} 个文件`)
 
-    // 获取所有文件状态
-    const statusMap = new Map<string, FileStatus>()
-    let hasTranslatedFiles = false
-    
-    for (const filePath of allFiles) {
-      const status = await this.getFileStatus(projectPath, filePath, upstreamBranch, workingBranch)
-      statusMap.set(filePath, status)
-      
-      // 只有已翻译或过时的文件才需要保存到状态文件
-      if (status.status === 'translated' || status.status === 'outdated') {
-        hasTranslatedFiles = true
-      }
-    }
+    // 批量获取上游文件哈希和修改状态
+    const [upstreamHashMap, modifiedMap] = await Promise.all([
+      this.getBatchUpstreamHashes(projectPath, watchDirectories, upstreamBranch),
+      this.getBatchModifiedStatus(projectPath)
+    ])
+
+    // 批量计算文件状态
+    const statusMap = await this.batchCalculateFileStatus(
+      projectPath,
+      allFiles,
+      upstreamBranch,
+      workingBranch,
+      upstreamHashMap,
+      modifiedMap
+    )
 
     // 构建文件树
     const tree = this.buildFileTree(allFiles, statusMap)
 
-    // 只有存在已翻译的文件时才保存状态缓存
+    // 检查是否有已翻译的文件需要保存状态缓存
+    const hasTranslatedFiles = Array.from(statusMap.values()).some(
+      status => status.status === 'translated' || status.status === 'outdated'
+    )
+    
     if (hasTranslatedFiles) {
       await this.saveStatusCache(projectPath, workingBranch)
     }
@@ -389,6 +573,9 @@ export class FileManager {
     const branchPrefix = `${projectPath}:${workingBranch}:`
     const keysToDelete = Array.from(this.statusCache.keys()).filter(key => key.startsWith(branchPrefix))
     keysToDelete.forEach(key => this.statusCache.delete(key))
+    
+    // 清除上游哈希缓存，确保获取最新的上游文件状态
+    this.clearUpstreamHashCache(projectPath, upstreamBranch)
     
     // 重新获取文件树（会自动计算状态）
     await this.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
@@ -443,14 +630,11 @@ export class FileManager {
         original = '无法读取上游分支的文件内容'
       }
 
-      // 读取工作分支的翻译文件 - 直接从本地文件系统读取
+      // 读取工作分支的翻译文件
       let translated = ''
       try {
-        // 直接从本地文件系统读取译文，因为切换分支时已经切换到工作分支
-        // 这样可以读取到未提交的修改
         translated = await this.readFileContent(projectPath, filePath)
       } catch (error) {
-        console.log('本地没有翻译文件，这是正常的未翻译状态')
         translated = ''
       }
 
@@ -497,36 +681,35 @@ export class FileManager {
     workingBranch: string
   ): Promise<void> {
     try {
-      // 获取文件内容
-      const fileContent = await this.getFileContent(projectPath, filePath, upstreamBranch, workingBranch)
+      // 获取原文内容
+      const originalContent = await this.readFileContent(projectPath, filePath, `upstream/${upstreamBranch}`)
       
-      if (!fileContent.original) {
-        throw new Error('无法获取原文内容')
-      }
-
-      // 调用 LLM 翻译
-      const translatedContent = await this.callLLMTranslation(fileContent.original, projectPath)
+      // 调用翻译服务
+      const translatedContent = await this.callLLMTranslation(originalContent, projectPath)
       
       // 保存翻译结果
       await this.saveFileContent(projectPath, filePath, translatedContent)
       
+      // 获取当前上游文件的blob哈希
+      const currentHash = await this.getFileBlobHash(projectPath, filePath, `upstream/${upstreamBranch}`)
+      
       // 更新文件状态缓存
-      const upstreamHash = await this.getFileHash(projectPath, filePath, `upstream/${upstreamBranch}`)
-      if (upstreamHash) {
-        const cacheKey = `${projectPath}:${workingBranch}:${filePath}`
-        this.statusCache.set(cacheKey, {
-          path: filePath,
-          status: 'translated',
-          modified: false,
-          lastHash: upstreamHash
-        })
-        await this.saveStatusCache(projectPath, workingBranch)
+      const cacheKey = `${projectPath}:${workingBranch}:${filePath}`
+      const fileStatus: FileStatus = {
+        path: filePath,
+        status: 'translated',
+        lastHash: currentHash || undefined
       }
       
-      console.log(`文件 ${filePath} 翻译完成`)
+      this.statusCache.set(cacheKey, fileStatus)
+      
+      // 保存缓存到文件
+      await this.saveStatusCache(projectPath, workingBranch)
+      
+      console.log(`文件翻译完成: ${filePath}`)
     } catch (error) {
-      console.error(`翻译文件 ${filePath} 失败:`, error)
-      throw new Error(`翻译文件失败: ${filePath} - ${(error as Error).message}`)
+      console.error(`翻译文件失败: ${filePath}`, error)
+      throw error
     }
   }
 

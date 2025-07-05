@@ -136,6 +136,17 @@ app.whenReady().then(async () => {
     return true
   })
 
+  // IPC handlers for cache management
+  ipcMain.handle('files:clear-project-cache', async (_, projectPath) => {
+    fileManager.clearProjectCache(projectPath)
+    return true
+  })
+
+  ipcMain.handle('files:clear-branch-cache', async (_, projectPath, workingBranch, upstreamBranch) => {
+    fileManager.clearBranchCache(projectPath, workingBranch, upstreamBranch)
+    return true
+  })
+
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 

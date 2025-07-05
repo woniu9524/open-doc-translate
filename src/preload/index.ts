@@ -30,7 +30,11 @@ const api = {
     saveFileContent: (projectPath: string, filePath: string, content: string) => 
       ipcRenderer.invoke('files:save-file-content', projectPath, filePath, content),
     translateFile: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => 
-      ipcRenderer.invoke('files:translate-file', projectPath, filePath, upstreamBranch, workingBranch)
+      ipcRenderer.invoke('files:translate-file', projectPath, filePath, upstreamBranch, workingBranch),
+    clearProjectCache: (projectPath: string) => 
+      ipcRenderer.invoke('files:clear-project-cache', projectPath),
+    clearBranchCache: (projectPath: string, workingBranch: string, upstreamBranch: string) => 
+      ipcRenderer.invoke('files:clear-branch-cache', projectPath, workingBranch, upstreamBranch)
   }
 }
 

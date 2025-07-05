@@ -103,6 +103,11 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
     }
 
     try {
+      // 清除之前项目的缓存
+      if (activeProject) {
+        await fileService.clearProjectCache(activeProject.path)
+      }
+      
       await configService.setActiveProject(projectPath)
       const project = projects.find(p => p.path === projectPath)
       if (project) {
@@ -120,9 +125,17 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
     setUpstreamBranch(branch)
     if (activeProject) {
       try {
+        // 清除分支相关缓存
+        await fileService.clearBranchCache(activeProject.path, activeProject.workingBranch, activeProject.upstreamBranch)
+        
         await configService.updateProject(activeProject.path, {
           upstreamBranch: branch
         })
+        
+        // 通知文件树刷新
+        if (onFileTreeRefresh) {
+          onFileTreeRefresh()
+        }
       } catch (error) {
         console.error('更新上游分支失败:', error)
       }
@@ -133,6 +146,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
     setWorkingBranch(branch)
     if (activeProject) {
       try {
+        // 清除分支相关缓存
+        await fileService.clearBranchCache(activeProject.path, activeProject.workingBranch, activeProject.upstreamBranch)
+        
         // 先切换Git分支
         await configService.checkoutBranch(activeProject.path, branch)
         
