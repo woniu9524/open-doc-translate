@@ -1,0 +1,252 @@
+.main-work-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #374151;
+}
+
+.empty-state p {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+.work-area-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-path {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.file-status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+/* 根据状态设置不同的背景色和文字色 */
+.file-status-badge.translated {
+  background-color: #d1fae5;
+  color: #065f46;
+  border-color: #10b981;
+}
+
+.file-status-badge.outdated {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-color: #f59e0b;
+}
+
+.file-status-badge.untranslated {
+  background-color: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+.unsaved-indicator {
+  color: #f59e0b;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.diff-editor {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pane-header h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.diff-indicator {
+  font-size: 12px;
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.empty-indicator {
+  font-size: 12px;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.editor-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.code-content {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  background-color: #ffffff;
+  border: none;
+  outline: none;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.code-editor {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  margin: 0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #374151;
+  background-color: #ffffff;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: auto;
+}
+
+.code-editor:focus {
+  background-color: #fefefe;
+}
+
+.editor-divider {
+  width: 1px;
+  background-color: #e5e7eb;
+  flex-shrink: 0;
+}
+
+.empty-editor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background-color: #f9fafb;
+}
+
+.empty-editor-content {
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-editor-content .empty-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.empty-editor-content p {
+  font-size: 1rem;
+  margin-bottom: 16px;
+}
+
+/* 差异高亮样式 */
+.diff-line {
+  display: block;
+  padding: 2px 0;
+  margin: 0;
+}
+
+.diff-line.changed {
+  background-color: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  padding-left: 8px;
+  margin-left: -8px;
+}
+
+.original-pane .code-content {
+  background-color: #fafafa;
+}
+
+.translated-pane .code-content {
+  background-color: #ffffff;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .diff-editor {
+    flex-direction: column;
+  }
+  
+  .editor-divider {
+    width: 100%;
+    height: 1px;
+  }
+  
+  .work-area-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .action-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
+} 
