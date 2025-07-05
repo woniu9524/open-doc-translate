@@ -20,6 +20,8 @@ declare global {
         getFileTree: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => Promise<FileItem[]>
         getFileStatus: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<FileStatus>
         syncFileStatuses: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => Promise<void>
+        getFileContent: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<FileContent>
+        saveFileContent: (projectPath: string, filePath: string, content: string) => Promise<void>
       }
     }
   }
@@ -39,4 +41,11 @@ interface FileStatus {
   status: 'translated' | 'outdated' | 'untranslated'
   modified?: boolean
   lastHash?: string
+}
+
+interface FileContent {
+  original: string
+  translated: string
+  status: 'translated' | 'outdated' | 'untranslated'
+  hasChanges?: boolean
 }

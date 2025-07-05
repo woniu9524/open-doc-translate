@@ -59,13 +59,13 @@ export class ConfigManager {
         .map(branch => branch.replace(/^\*?\s*/, '').trim())
         .filter(branch => branch && !branch.startsWith('('))
 
-      // 获取远程分支
+      // 获取远程分支，只获取 upstream 下的分支
       const { stdout: remoteBranches } = await execAsync('git branch -r', { cwd: projectPath })
       const remote = remoteBranches
         .split('\n')
         .map(branch => branch.trim())
-        .filter(branch => branch && !branch.includes('->'))
-        .map(branch => branch.replace(/^origin\//, ''))
+        .filter(branch => branch && !branch.includes('->') && branch.startsWith('upstream/'))
+        .map(branch => branch.replace(/^upstream\//, ''))
 
       return { local, remote }
     } catch (error) {

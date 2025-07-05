@@ -66,8 +66,10 @@ export class FileManager {
   // 获取文件的Git commit hash
   private async getFileHash(projectPath: string, filePath: string, branch: string): Promise<string | null> {
     try {
+      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
+      const normalizedPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
-        `git log -1 --format="%H" ${branch} -- "${filePath}"`,
+        `git log -1 --format="%H" ${branch} -- "${normalizedPath}"`,
         { cwd: projectPath }
       )
       return stdout.trim() || null
@@ -80,8 +82,10 @@ export class FileManager {
   // 检查文件是否在工作分支中被修改
   private async isFileModified(projectPath: string, filePath: string, workingBranch: string): Promise<boolean> {
     try {
+      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
+      const normalizedPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
-        `git status --porcelain "${filePath}"`,
+        `git status --porcelain "${normalizedPath}"`,
         { cwd: projectPath }
       )
       return stdout.trim().length > 0
@@ -94,7 +98,9 @@ export class FileManager {
   // 检查文件是否存在于工作分支
   private async fileExistsInBranch(projectPath: string, filePath: string, branch: string): Promise<boolean> {
     try {
-      await execAsync(`git cat-file -e ${branch}:"${filePath}"`, { cwd: projectPath })
+      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
+      const normalizedPath = filePath.replace(/\\/g, '/')
+      await execAsync(`git cat-file -e ${branch}:"${normalizedPath}"`, { cwd: projectPath })
       return true
     } catch (error) {
       return false
@@ -335,5 +341,103 @@ export class FileManager {
     
     // 重新获取文件树（会自动计算状态）
     await this.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
+  }
+
+  // 读取文件内容
+  async readFileContent(
+    projectPath: string,
+    filePath: string,
+    branch?: string
+  ): Promise<string> {
+    try {
+      if (branch) {
+        // 从指定分支读取文件
+        // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
+        const normalizedPath = filePath.replace(/\\/g, '/')
+        const { stdout } = await execAsync(`git show ${branch}:"${normalizedPath}"`, { cwd: projectPath })
+        return stdout
+      } else {
+        // 从本地文件系统读取文件
+        const fullPath = join(projectPath, filePath)
+        return await fs.readFile(fullPath, 'utf-8')
+      }
+    } catch (error) {
+      console.error(`读取文件 ${filePath} 失败:`, error)
+      throw new Error(`无法读取文件: ${filePath}`)
+    }
+  }
+
+  // 获取文件的完整内容信息
+  async getFileContent(
+    projectPath: string,
+    filePath: string,
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<{
+    original: string
+    translated: string
+    status: 'translated' | 'outdated' | 'untranslated'
+    hasChanges?: boolean
+  }> {
+    try {
+      // 获取文件状态
+      const fileStatus = await this.getFileStatus(projectPath, filePath, upstreamBranch, workingBranch)
+      
+      // 读取上游分支的原文
+      let original = ''
+      try {
+        original = await this.readFileContent(projectPath, filePath, `upstream/${upstreamBranch}`)
+      } catch (error) {
+        console.error('读取上游分支文件失败:', error)
+        original = '无法读取上游分支的文件内容'
+      }
+
+      // 读取本地翻译文件
+      let translated = ''
+      try {
+        translated = await this.readFileContent(projectPath, filePath)
+      } catch (error) {
+        // 如果本地文件不存在，尝试从工作分支读取
+        try {
+          translated = await this.readFileContent(projectPath, filePath, workingBranch)
+        } catch (branchError) {
+          console.log('本地和工作分支都没有翻译文件，这是正常的未翻译状态')
+          translated = ''
+        }
+      }
+
+      return {
+        original,
+        translated,
+        status: fileStatus.status,
+        hasChanges: fileStatus.modified
+      }
+    } catch (error) {
+      console.error(`获取文件内容失败:`, error)
+      throw error
+    }
+  }
+
+  // 保存文件内容
+  async saveFileContent(
+    projectPath: string,
+    filePath: string,
+    content: string
+  ): Promise<void> {
+    try {
+      const fullPath = join(projectPath, filePath)
+      const dirPath = dirname(fullPath)
+      
+      // 确保目录存在
+      await fs.mkdir(dirPath, { recursive: true })
+      
+      // 写入文件
+      await fs.writeFile(fullPath, content, 'utf-8')
+      
+      console.log(`文件 ${filePath} 保存成功`)
+    } catch (error) {
+      console.error(`保存文件 ${filePath} 失败:`, error)
+      throw new Error(`保存文件失败: ${filePath}`)
+    }
   }
 } 

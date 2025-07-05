@@ -14,6 +14,13 @@ export interface FileStatus {
   lastHash?: string
 }
 
+export interface FileContent {
+  original: string
+  translated: string
+  status: 'translated' | 'outdated' | 'untranslated'
+  hasChanges?: boolean
+}
+
 export class FileService {
   async getFileTree(
     projectPath: string,
@@ -59,6 +66,28 @@ export class FileService {
       upstreamBranch,
       workingBranch
     )
+  }
+
+  async getFileContent(
+    projectPath: string,
+    filePath: string,
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<FileContent> {
+    return await window.api.files.getFileContent(
+      projectPath,
+      filePath,
+      upstreamBranch,
+      workingBranch
+    )
+  }
+
+  async saveFileContent(
+    projectPath: string,
+    filePath: string,
+    content: string
+  ): Promise<void> {
+    await window.api.files.saveFileContent(projectPath, filePath, content)
   }
 }
 

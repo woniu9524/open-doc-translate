@@ -117,6 +117,15 @@ app.whenReady().then(async () => {
     return true
   })
 
+  ipcMain.handle('files:get-file-content', async (_, projectPath, filePath, upstreamBranch, workingBranch) => {
+    return await fileManager.getFileContent(projectPath, filePath, upstreamBranch, workingBranch)
+  })
+
+  ipcMain.handle('files:save-file-content', async (_, projectPath, filePath, content) => {
+    await fileManager.saveFileContent(projectPath, filePath, content)
+    return true
+  })
+
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 

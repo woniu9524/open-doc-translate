@@ -23,7 +23,11 @@ const api = {
     getFileStatus: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => 
       ipcRenderer.invoke('files:get-file-status', projectPath, filePath, upstreamBranch, workingBranch),
     syncFileStatuses: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => 
-      ipcRenderer.invoke('files:sync-file-statuses', projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
+      ipcRenderer.invoke('files:sync-file-statuses', projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch),
+    getFileContent: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => 
+      ipcRenderer.invoke('files:get-file-content', projectPath, filePath, upstreamBranch, workingBranch),
+    saveFileContent: (projectPath: string, filePath: string, content: string) => 
+      ipcRenderer.invoke('files:save-file-content', projectPath, filePath, content)
   }
 }
 
