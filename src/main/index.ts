@@ -4,9 +4,11 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { ConfigManager } from './config'
 import { FileManager } from './fileManager'
+import { GitService } from './gitService'
 
 let configManager: ConfigManager
 let fileManager: FileManager
+let gitService: GitService
 
 function createWindow(): void {
   // Create the browser window.
@@ -53,6 +55,9 @@ app.whenReady().then(async () => {
 
   // 初始化文件管理器
   fileManager = new FileManager(configManager)
+
+  // 初始化Git服务
+  gitService = new GitService()
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -145,6 +150,57 @@ app.whenReady().then(async () => {
   ipcMain.handle('files:clear-branch-cache', async (_, projectPath, workingBranch, upstreamBranch) => {
     fileManager.clearBranchCache(projectPath, workingBranch, upstreamBranch)
     return true
+  })
+
+  // IPC handlers for Git operations
+  ipcMain.handle('git:get-status', async (_, projectPath) => {
+    return await gitService.getGitStatus(projectPath)
+  })
+
+  ipcMain.handle('git:stage-file', async (_, projectPath, filePath) => {
+    await gitService.stageFile(projectPath, filePath)
+    return true
+  })
+
+  ipcMain.handle('git:stage-all', async (_, projectPath) => {
+    await gitService.stageAllFiles(projectPath)
+    return true
+  })
+
+  ipcMain.handle('git:unstage-file', async (_, projectPath, filePath) => {
+    await gitService.unstageFile(projectPath, filePath)
+    return true
+  })
+
+  ipcMain.handle('git:commit', async (_, projectPath, message) => {
+    await gitService.commit(projectPath, message)
+    return true
+  })
+
+  ipcMain.handle('git:push', async (_, projectPath, remote, branch) => {
+    await gitService.push(projectPath, remote, branch)
+    return true
+  })
+
+  ipcMain.handle('git:commit-and-push', async (_, projectPath, message, remote, branch) => {
+    await gitService.commitAndPush(projectPath, message, remote, branch)
+    return true
+  })
+
+  ipcMain.handle('git:get-commit-history', async (_, projectPath, limit) => {
+    return await gitService.getCommitHistory(projectPath, limit)
+  })
+
+  ipcMain.handle('git:get-current-branch', async (_, projectPath) => {
+    return await gitService.getCurrentBranch(projectPath)
+  })
+
+  ipcMain.handle('git:has-uncommitted-changes', async (_, projectPath) => {
+    return await gitService.hasUncommittedChanges(projectPath)
+  })
+
+  ipcMain.handle('git:get-remote-url', async (_, projectPath, remote) => {
+    return await gitService.getRemoteUrl(projectPath, remote)
   })
 
   // IPC test

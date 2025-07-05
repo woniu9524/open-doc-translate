@@ -1,7 +1,9 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { configService } from '../services/configService'
 import { fileService, FileItem } from '../services/fileService'
+import { gitService } from '../services/gitService'
 import { AppConfig, ProjectConfig } from '../types/config'
+import { GitFileStatus, GitCommit } from '../../../preload/index.d'
 import TranslationDialog from './TranslationDialog'
 import './LeftPanel.css'
 
@@ -50,6 +52,14 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   const [files, setFiles] = useState<FileItem[]>([])
   const [isLoadingFiles, setIsLoadingFiles] = useState(false)
 
+  // Git相关状态
+  const [gitStatus, setGitStatus] = useState<GitFileStatus[]>([])
+  const [commitHistory, setCommitHistory] = useState<GitCommit[]>([])
+  const [commitMessage, setCommitMessage] = useState('')
+  const [currentBranch, setCurrentBranch] = useState('')
+  const [isLoadingGit, setIsLoadingGit] = useState(false)
+  const [isCommitting, setIsCommitting] = useState(false)
+
   // 加载文件树
   const loadFileTree = async (project: ProjectConfig) => {
     if (!project) return
@@ -94,11 +104,115 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     }
   }
 
+  // 加载Git状态
+  const loadGitStatus = async (project: ProjectConfig) => {
+    if (!project) return
+
+    setIsLoadingGit(true)
+    try {
+      const [status, history, branch] = await Promise.all([
+        gitService.getStatus(project.path),
+        gitService.getCommitHistory(project.path, 10),
+        gitService.getCurrentBranch(project.path)
+      ])
+      
+      setGitStatus(status)
+      setCommitHistory(history)
+      setCurrentBranch(branch)
+    } catch (error) {
+      console.error('加载Git状态失败:', error)
+    } finally {
+      setIsLoadingGit(false)
+    }
+  }
+
+  // 暂存文件
+  const handleStageFile = async (filePath: string) => {
+    if (!activeProject) return
+
+    try {
+      await gitService.stageFile(activeProject.path, filePath)
+      await loadGitStatus(activeProject)
+    } catch (error) {
+      console.error('暂存文件失败:', error)
+      alert('暂存文件失败: ' + (error as Error).message)
+    }
+  }
+
+  // 暂存所有文件
+  const handleStageAll = async () => {
+    if (!activeProject) return
+
+    try {
+      await gitService.stageAll(activeProject.path)
+      await loadGitStatus(activeProject)
+    } catch (error) {
+      console.error('暂存所有文件失败:', error)
+      alert('暂存所有文件失败: ' + (error as Error).message)
+    }
+  }
+
+  // 取消暂存文件
+  const handleUnstageFile = async (filePath: string) => {
+    if (!activeProject) return
+
+    try {
+      await gitService.unstageFile(activeProject.path, filePath)
+      await loadGitStatus(activeProject)
+    } catch (error) {
+      console.error('取消暂存文件失败:', error)
+      alert('取消暂存文件失败: ' + (error as Error).message)
+    }
+  }
+
+  // 提交
+  const handleCommit = async () => {
+    if (!activeProject || !commitMessage.trim()) {
+      alert('请输入提交信息')
+      return
+    }
+
+    setIsCommitting(true)
+    try {
+      await gitService.commit(activeProject.path, commitMessage)
+      setCommitMessage('')
+      await loadGitStatus(activeProject)
+      alert('提交成功')
+    } catch (error) {
+      console.error('提交失败:', error)
+      alert('提交失败: ' + (error as Error).message)
+    } finally {
+      setIsCommitting(false)
+    }
+  }
+
+  // 提交并推送
+  const handleCommitAndPush = async () => {
+    if (!activeProject || !commitMessage.trim()) {
+      alert('请输入提交信息')
+      return
+    }
+
+    setIsCommitting(true)
+    try {
+      await gitService.commitAndPush(activeProject.path, commitMessage, 'origin', currentBranch)
+      setCommitMessage('')
+      await loadGitStatus(activeProject)
+      alert('提交并推送成功')
+    } catch (error) {
+      console.error('提交并推送失败:', error)
+      alert('提交并推送失败: ' + (error as Error).message)
+    } finally {
+      setIsCommitting(false)
+    }
+  }
+
   // 暴露给父组件的方法
   useImperativeHandle(ref, () => ({
     refreshFiles: () => {
       if (activeProject) {
         syncFileStatuses(activeProject)
+        loadGitStatus(activeProject)
       }
     }
   }))
@@ -171,6 +285,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   useEffect(() => {
     if (activeProject) {
       loadFileTree(activeProject)
+      loadGitStatus(activeProject)
     }
   }, [activeProject])
 
@@ -398,38 +513,163 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     </div>
   )
 
-  const renderGit = () => (
-    <div className="git-content">
-      <div className="git-section">
-        <h3>变更列表</h3>
-        <div className="changed-files">
-          <div className="changed-file">
-            <span className="file-status">🟡</span>
-            <span className="file-name">docs/getting-started.md</span>
-            <button className="btn btn-sm">暂存</button>
-          </div>
-          <div className="changed-file">
-            <span className="file-status">🟢</span>
-            <span className="file-name">docs/api.md</span>
-            <button className="btn btn-sm">暂存</button>
+  const renderGit = () => {
+    const getStatusIcon = (status: string) => {
+      switch (status) {
+        case 'M': return '📝' // 修改
+        case 'A': return '➕' // 添加
+        case 'D': return '🗑️' // 删除
+        case 'R': return '🔄' // 重命名
+        case 'C': return '📋' // 复制
+        case 'U': return '❓' // 未合并
+        case '??': return '❔' // 未跟踪
+        default: return '📄'
+      }
+    }
+
+    const getStatusText = (status: string) => {
+      switch (status) {
+        case 'M': return '已修改'
+        case 'A': return '已添加'
+        case 'D': return '已删除'
+        case 'R': return '已重命名'
+        case 'C': return '已复制'
+        case 'U': return '未合并'
+        case '??': return '未跟踪'
+        default: return '未知'
+      }
+    }
+
+    const stagedFiles = gitStatus.filter(file => file.staged)
+    const unstagedFiles = gitStatus.filter(file => !file.staged)
+
+    return (
+      <div className="git-content">
+        {/* 分支信息 */}
+        <div className="git-section">
+          <h3>当前分支: {currentBranch}</h3>
+          {isLoadingGit && <div className="loading-indicator">🔄 加载中...</div>}
+        </div>
+
+        {/* 暂存区 */}
+        <div className="git-section">
+          <h3>暂存的更改 ({stagedFiles.length})</h3>
+          {stagedFiles.length > 0 ? (
+            <div className="changed-files">
+              {stagedFiles.map(file => (
+                <div key={file.path} className="changed-file">
+                  <span className="file-status" title={getStatusText(file.status)}>
+                    {getStatusIcon(file.status)}
+                  </span>
+                  <span className="file-name" title={file.path}>{file.path}</span>
+                  <button 
+                    className="btn btn-sm btn-secondary"
+                    onClick={() => handleUnstageFile(file.path)}
+                    disabled={isLoadingGit}
+                  >
+                    取消暂存
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <p>没有暂存的更改</p>
+            </div>
+          )}
+        </div>
+
+        {/* 工作区更改 */}
+        <div className="git-section">
+          <h3>工作区更改 ({unstagedFiles.length})</h3>
+          {unstagedFiles.length > 0 ? (
+            <>
+              <div className="changed-files">
+                {unstagedFiles.map(file => (
+                  <div key={file.path} className="changed-file">
+                    <span className="file-status" title={getStatusText(file.status)}>
+                      {getStatusIcon(file.status)}
+                    </span>
+                    <span className="file-name" title={file.path}>{file.path}</span>
+                    <button 
+                      className="btn btn-sm btn-primary"
+                      onClick={() => handleStageFile(file.path)}
+                      disabled={isLoadingGit}
+                    >
+                      暂存
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button 
+                className="btn btn-sm btn-primary stage-all-btn"
+                onClick={handleStageAll}
+                disabled={isLoadingGit}
+              >
+                全部暂存
+              </button>
+            </>
+          ) : (
+            <div className="empty-state">
+              <p>工作区很干净</p>
+            </div>
+          )}
+        </div>
+
+        {/* 提交区 */}
+        <div className="git-section">
+          <h3>提交与推送</h3>
+          <textarea 
+            className="commit-message"
+            placeholder="输入提交信息..."
+            rows={3}
+            value={commitMessage}
+            onChange={(e) => setCommitMessage(e.target.value)}
+            disabled={isCommitting}
+          />
+          <div className="commit-buttons">
+            <button 
+              className="btn btn-success"
+              onClick={handleCommit}
+              disabled={isCommitting || stagedFiles.length === 0 || !commitMessage.trim()}
+            >
+              {isCommitting ? '提交中...' : '提交'}
+            </button>
+            <button 
+              className="btn btn-success commit-push-btn"
+              onClick={handleCommitAndPush}
+              disabled={isCommitting || stagedFiles.length === 0 || !commitMessage.trim()}
+            >
+              {isCommitting ? '提交推送中...' : '提交并推送'}
+            </button>
           </div>
         </div>
-        <button className="btn btn-sm stage-all-btn">全部暂存</button>
+
+        {/* 提交历史 */}
+        <div className="git-section">
+          <h3>提交历史</h3>
+          {commitHistory.length > 0 ? (
+            <div className="commit-history">
+              {commitHistory.map(commit => (
+                <div key={commit.hash} className="commit-item">
+                  <div className="commit-header">
+                    <span className="commit-hash">{commit.shortHash}</span>
+                    <span className="commit-date">{commit.date}</span>
+                  </div>
+                  <div className="commit-message">{commit.message}</div>
+                  <div className="commit-author">by {commit.author}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <p>没有提交历史</p>
+            </div>
+          )}
+        </div>
       </div>
-      
-      <div className="git-section">
-        <h3>提交与推送</h3>
-        <textarea 
-          className="commit-message"
-          placeholder="输入提交信息..."
-          rows={3}
-        />
-        <button className="btn btn-success commit-push-btn">
-          提交并推送
-        </button>
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderSettings = () => (
     <div className="settings-content">

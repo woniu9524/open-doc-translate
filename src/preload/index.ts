@@ -35,6 +35,19 @@ const api = {
       ipcRenderer.invoke('files:clear-project-cache', projectPath),
     clearBranchCache: (projectPath: string, workingBranch: string, upstreamBranch: string) => 
       ipcRenderer.invoke('files:clear-branch-cache', projectPath, workingBranch, upstreamBranch)
+  },
+  git: {
+    getStatus: (projectPath: string) => ipcRenderer.invoke('git:get-status', projectPath),
+    stageFile: (projectPath: string, filePath: string) => ipcRenderer.invoke('git:stage-file', projectPath, filePath),
+    stageAll: (projectPath: string) => ipcRenderer.invoke('git:stage-all', projectPath),
+    unstageFile: (projectPath: string, filePath: string) => ipcRenderer.invoke('git:unstage-file', projectPath, filePath),
+    commit: (projectPath: string, message: string) => ipcRenderer.invoke('git:commit', projectPath, message),
+    push: (projectPath: string, remote?: string, branch?: string) => ipcRenderer.invoke('git:push', projectPath, remote, branch),
+    commitAndPush: (projectPath: string, message: string, remote?: string, branch?: string) => ipcRenderer.invoke('git:commit-and-push', projectPath, message, remote, branch),
+    getCommitHistory: (projectPath: string, limit?: number) => ipcRenderer.invoke('git:get-commit-history', projectPath, limit),
+    getCurrentBranch: (projectPath: string) => ipcRenderer.invoke('git:get-current-branch', projectPath),
+    hasUncommittedChanges: (projectPath: string) => ipcRenderer.invoke('git:has-uncommitted-changes', projectPath),
+    getRemoteUrl: (projectPath: string, remote?: string) => ipcRenderer.invoke('git:get-remote-url', projectPath, remote)
   }
 }
 

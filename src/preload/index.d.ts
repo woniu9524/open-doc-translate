@@ -1,6 +1,20 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import { AppConfig, ProjectConfig } from '../renderer/src/types/config'
 
+export interface GitFileStatus {
+  path: string
+  status: string
+  staged: boolean
+}
+
+export interface GitCommit {
+  hash: string
+  message: string
+  author: string
+  date: string
+  shortHash: string
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
@@ -26,6 +40,19 @@ declare global {
         translateFile: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => Promise<void>
         clearProjectCache: (projectPath: string) => Promise<void>
         clearBranchCache: (projectPath: string, workingBranch: string, upstreamBranch: string) => Promise<void>
+      }
+      git: {
+        getStatus: (projectPath: string) => Promise<GitFileStatus[]>
+        stageFile: (projectPath: string, filePath: string) => Promise<boolean>
+        stageAll: (projectPath: string) => Promise<boolean>
+        unstageFile: (projectPath: string, filePath: string) => Promise<boolean>
+        commit: (projectPath: string, message: string) => Promise<boolean>
+        push: (projectPath: string, remote?: string, branch?: string) => Promise<boolean>
+        commitAndPush: (projectPath: string, message: string, remote?: string, branch?: string) => Promise<boolean>
+        getCommitHistory: (projectPath: string, limit?: number) => Promise<GitCommit[]>
+        getCurrentBranch: (projectPath: string) => Promise<string>
+        hasUncommittedChanges: (projectPath: string) => Promise<boolean>
+        getRemoteUrl: (projectPath: string, remote?: string) => Promise<string>
       }
     }
   }
