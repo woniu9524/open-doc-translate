@@ -25,7 +25,6 @@ export interface FileStatus {
 
 export class FileManager {
   private statusCache: Map<string, FileStatus> = new Map()
-  private statusFilePath: string = ''
   private llmService: LLMService
   private upstreamHashCache: Map<string, Map<string, string>> = new Map() // 缓存上游分支的文件哈希
 
@@ -62,7 +61,7 @@ export class FileManager {
 
   // 保存文件状态缓存
   private async saveStatusCache(projectPath: string, workingBranch: string): Promise<void> {
-    if (!this.statusFilePath) return
+    const statusFilePath = this.getStatusFilePath(projectPath, workingBranch)
     
     const statusObj: Record<string, FileStatus> = {}
     const branchPrefix = `${projectPath}:${workingBranch}:`
@@ -82,8 +81,8 @@ export class FileManager {
     // 如果没有需要保存的状态，删除状态文件
     if (Object.keys(statusObj).length === 0) {
       try {
-        await fs.unlink(this.statusFilePath)
-        console.log(`删除空状态文件: ${this.statusFilePath}`)
+        await fs.unlink(statusFilePath)
+        console.log(`删除空状态文件: ${statusFilePath}`)
       } catch (error) {
         // 文件不存在是正常的，不需要报错
       }
@@ -91,8 +90,8 @@ export class FileManager {
     }
     
     try {
-      await fs.writeFile(this.statusFilePath, JSON.stringify(statusObj, null, 2), 'utf-8')
-      console.log(`保存状态文件: ${this.statusFilePath}，包含 ${Object.keys(statusObj).length} 个文件`)
+      await fs.writeFile(statusFilePath, JSON.stringify(statusObj, null, 2), 'utf-8')
+      console.log(`保存状态文件: ${statusFilePath}，包含 ${Object.keys(statusObj).length} 个文件`)
     } catch (error) {
       console.error(`保存分支 ${workingBranch} 的状态文件失败:`, error)
     }
