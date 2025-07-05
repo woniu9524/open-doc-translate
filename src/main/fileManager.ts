@@ -32,39 +32,63 @@ export class FileManager {
     this.llmService = new LLMService(configManager)
   }
 
-  private getStatusFilePath(projectPath: string): string {
-    return join(projectPath, '.opendoc.json')
+  private getStatusFilePath(projectPath: string, workingBranch: string): string {
+    return join(projectPath, `.opendoc-${workingBranch}.json`)
   }
 
   // 加载文件状态缓存
-  private async loadStatusCache(projectPath: string): Promise<void> {
-    this.statusFilePath = this.getStatusFilePath(projectPath)
+  private async loadStatusCache(projectPath: string, workingBranch: string): Promise<void> {
+    this.statusFilePath = this.getStatusFilePath(projectPath, workingBranch)
     try {
       const statusData = await fs.readFile(this.statusFilePath, 'utf-8')
       const statusObj = JSON.parse(statusData)
       this.statusCache.clear()
       Object.entries(statusObj).forEach(([path, status]) => {
-        this.statusCache.set(path, status as FileStatus)
+        // 重新构建缓存key，包含工作分支信息
+        const cacheKey = `${projectPath}:${workingBranch}:${path}`
+        this.statusCache.set(cacheKey, status as FileStatus)
       })
     } catch (error) {
-      console.log('状态文件不存在或损坏，使用空缓存')
+      console.log(`分支 ${workingBranch} 的状态文件不存在或损坏，使用空缓存`)
       this.statusCache.clear()
     }
   }
 
   // 保存文件状态缓存
-  private async saveStatusCache(): Promise<void> {
+  private async saveStatusCache(projectPath: string, workingBranch: string): Promise<void> {
     if (!this.statusFilePath) return
     
     const statusObj: Record<string, FileStatus> = {}
-    this.statusCache.forEach((status, path) => {
-      statusObj[path] = status
+    const branchPrefix = `${projectPath}:${workingBranch}:`
+    
+    // 只保存当前分支的已翻译或过时的文件状态
+    this.statusCache.forEach((status, cacheKey) => {
+      if (cacheKey.startsWith(branchPrefix)) {
+        // 只保存已翻译或过时的文件，未翻译的文件不保存
+        if (status.status === 'translated' || status.status === 'outdated') {
+          // 提取出文件路径（去掉前缀）
+          const filePath = cacheKey.substring(branchPrefix.length)
+          statusObj[filePath] = status
+        }
+      }
     })
+    
+    // 如果没有需要保存的状态，删除状态文件
+    if (Object.keys(statusObj).length === 0) {
+      try {
+        await fs.unlink(this.statusFilePath)
+        console.log(`删除空状态文件: ${this.statusFilePath}`)
+      } catch (error) {
+        // 文件不存在是正常的，不需要报错
+      }
+      return
+    }
     
     try {
       await fs.writeFile(this.statusFilePath, JSON.stringify(statusObj, null, 2), 'utf-8')
+      console.log(`保存状态文件: ${this.statusFilePath}，包含 ${Object.keys(statusObj).length} 个文件`)
     } catch (error) {
-      console.error('保存状态文件失败:', error)
+      console.error(`保存分支 ${workingBranch} 的状态文件失败:`, error)
     }
   }
 
@@ -129,7 +153,7 @@ export class FileManager {
     upstreamBranch: string,
     workingBranch: string
   ): Promise<FileStatus> {
-    const cacheKey = `${projectPath}:${filePath}`
+    const cacheKey = `${projectPath}:${workingBranch}:${filePath}`
     
     // 检查缓存
     if (this.statusCache.has(cacheKey)) {
@@ -142,8 +166,10 @@ export class FileManager {
     // 计算文件状态
     const status = await this.calculateFileStatus(projectPath, filePath, upstreamBranch, workingBranch)
     
-    // 缓存结果
-    this.statusCache.set(cacheKey, status)
+    // 只有已翻译或过时的文件才缓存，未翻译的文件不缓存
+    if (status.status === 'translated' || status.status === 'outdated') {
+      this.statusCache.set(cacheKey, status)
+    }
     
     return status
   }
@@ -157,31 +183,32 @@ export class FileManager {
   ): Promise<FileStatus> {
     const upstreamExists = await this.fileExistsInBranch(projectPath, filePath, `upstream/${upstreamBranch}`)
     const localExists = await this.fileExistsLocally(projectPath, filePath)
-    const workingExists = await this.fileExistsInBranch(projectPath, filePath, workingBranch)
     const modified = await this.isFileModified(projectPath, filePath, workingBranch)
 
     let status: 'translated' | 'outdated' | 'untranslated' = 'untranslated'
     let lastHash: string | undefined = undefined
 
     if (upstreamExists) {
-      const upstreamHash = await this.getFileHash(projectPath, filePath, `upstream/${upstreamBranch}`)
-      lastHash = upstreamHash || undefined
-
-      if (localExists || workingExists) {
-        // 获取本地文件对应的上游hash（从缓存或重新计算）
-        const cachedStatus = this.statusCache.get(`${projectPath}:${filePath}`)
-        const lastKnownHash = cachedStatus?.lastHash
-
-        if (lastKnownHash && lastKnownHash === upstreamHash) {
+      // 检查是否有翻译记录
+      const cacheKey = `${projectPath}:${workingBranch}:${filePath}`
+      const cachedStatus = this.statusCache.get(cacheKey)
+      
+      if (cachedStatus?.lastHash) {
+        // 有翻译记录，检查是否过时
+        const upstreamHash = await this.getFileHash(projectPath, filePath, `upstream/${upstreamBranch}`)
+        
+        if (upstreamHash && cachedStatus.lastHash === upstreamHash) {
           status = 'translated'
-        } else if (lastKnownHash && lastKnownHash !== upstreamHash) {
-          status = 'outdated'
+          lastHash = upstreamHash
         } else {
-          // 首次检测，假设如果本地存在则为已翻译
-          status = 'translated'
+          status = 'outdated'
+          lastHash = cachedStatus.lastHash // 保留原来的hash记录
         }
       } else {
+        // 没有翻译记录，标记为未翻译
         status = 'untranslated'
+        // 未翻译时不记录hash
+        lastHash = undefined
       }
     }
 
@@ -308,7 +335,10 @@ export class FileManager {
     upstreamBranch: string,
     workingBranch: string
   ): Promise<FileItem[]> {
-    await this.loadStatusCache(projectPath)
+    console.log(`开始加载文件树 (分支: ${workingBranch})...`)
+    const startTime = Date.now()
+    
+    await this.loadStatusCache(projectPath, workingBranch)
 
     // 扫描所有监听目录
     const allFiles: string[] = []
@@ -317,18 +347,32 @@ export class FileManager {
       allFiles.push(...files)
     }
 
+    console.log(`扫描到 ${allFiles.length} 个文件`)
+
     // 获取所有文件状态
     const statusMap = new Map<string, FileStatus>()
+    let hasTranslatedFiles = false
+    
     for (const filePath of allFiles) {
       const status = await this.getFileStatus(projectPath, filePath, upstreamBranch, workingBranch)
       statusMap.set(filePath, status)
+      
+      // 只有已翻译或过时的文件才需要保存到状态文件
+      if (status.status === 'translated' || status.status === 'outdated') {
+        hasTranslatedFiles = true
+      }
     }
 
     // 构建文件树
     const tree = this.buildFileTree(allFiles, statusMap)
 
-    // 保存状态缓存
-    await this.saveStatusCache()
+    // 只有存在已翻译的文件时才保存状态缓存
+    if (hasTranslatedFiles) {
+      await this.saveStatusCache(projectPath, workingBranch)
+    }
+
+    const endTime = Date.now()
+    console.log(`文件树加载完成，耗时: ${endTime - startTime}ms`)
 
     return tree
   }
@@ -341,8 +385,10 @@ export class FileManager {
     upstreamBranch: string,
     workingBranch: string
   ): Promise<void> {
-    // 清空缓存，强制重新计算
-    this.statusCache.clear()
+    // 清空当前分支的缓存，强制重新计算
+    const branchPrefix = `${projectPath}:${workingBranch}:`
+    const keysToDelete = Array.from(this.statusCache.keys()).filter(key => key.startsWith(branchPrefix))
+    keysToDelete.forEach(key => this.statusCache.delete(key))
     
     // 重新获取文件树（会自动计算状态）
     await this.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
@@ -467,14 +513,14 @@ export class FileManager {
       // 更新文件状态缓存
       const upstreamHash = await this.getFileHash(projectPath, filePath, `upstream/${upstreamBranch}`)
       if (upstreamHash) {
-        const cacheKey = `${projectPath}:${filePath}`
+        const cacheKey = `${projectPath}:${workingBranch}:${filePath}`
         this.statusCache.set(cacheKey, {
           path: filePath,
           status: 'translated',
           modified: false,
           lastHash: upstreamHash
         })
-        await this.saveStatusCache()
+        await this.saveStatusCache(projectPath, workingBranch)
       }
       
       console.log(`文件 ${filePath} 翻译完成`)
