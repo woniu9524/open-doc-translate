@@ -1,0 +1,66 @@
+export interface FileItem {
+  name: string
+  path: string
+  status: 'translated' | 'outdated' | 'untranslated'
+  modified?: boolean
+  children?: FileItem[]
+  lastHash?: string
+}
+
+export interface FileStatus {
+  path: string
+  status: 'translated' | 'outdated' | 'untranslated'
+  modified?: boolean
+  lastHash?: string
+}
+
+export class FileService {
+  async getFileTree(
+    projectPath: string,
+    watchDirectories: string[],
+    fileTypes: string[],
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<FileItem[]> {
+    return await window.api.files.getFileTree(
+      projectPath,
+      watchDirectories,
+      fileTypes,
+      upstreamBranch,
+      workingBranch
+    )
+  }
+
+  async getFileStatus(
+    projectPath: string,
+    filePath: string,
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<FileStatus> {
+    return await window.api.files.getFileStatus(
+      projectPath,
+      filePath,
+      upstreamBranch,
+      workingBranch
+    )
+  }
+
+  async syncFileStatuses(
+    projectPath: string,
+    watchDirectories: string[],
+    fileTypes: string[],
+    upstreamBranch: string,
+    workingBranch: string
+  ): Promise<void> {
+    await window.api.files.syncFileStatuses(
+      projectPath,
+      watchDirectories,
+      fileTypes,
+      upstreamBranch,
+      workingBranch
+    )
+  }
+}
+
+// 创建单例实例
+export const fileService = new FileService() 

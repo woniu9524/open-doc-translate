@@ -3,8 +3,10 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { ConfigManager } from './config'
+import { FileManager } from './fileManager'
 
 let configManager: ConfigManager
+let fileManager: FileManager
 
 function createWindow(): void {
   // Create the browser window.
@@ -48,6 +50,9 @@ app.whenReady().then(async () => {
   // 初始化配置管理器
   configManager = new ConfigManager()
   await configManager.loadConfig()
+
+  // 初始化文件管理器
+  fileManager = new FileManager()
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -95,6 +100,20 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('config:fetch-upstream', async (_, projectPath) => {
     await configManager.fetchUpstream(projectPath)
+    return true
+  })
+
+  // IPC handlers for file management
+  ipcMain.handle('files:get-file-tree', async (_, projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch) => {
+    return await fileManager.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
+  })
+
+  ipcMain.handle('files:get-file-status', async (_, projectPath, filePath, upstreamBranch, workingBranch) => {
+    return await fileManager.getFileStatus(projectPath, filePath, upstreamBranch, workingBranch)
+  })
+
+  ipcMain.handle('files:sync-file-statuses', async (_, projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch) => {
+    await fileManager.syncFileStatuses(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
     return true
   })
 

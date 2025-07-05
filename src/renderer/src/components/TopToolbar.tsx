@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { configService } from '../services/configService'
+import { fileService } from '../services/fileService'
 import { ProjectConfig } from '../types/config'
 import './TopToolbar.css'
 
-interface TopToolbarProps {}
+interface TopToolbarProps {
+  onFileTreeRefresh?: () => void
+}
 
-const TopToolbar: React.FC<TopToolbarProps> = () => {
+const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
   const [projects, setProjects] = useState<ProjectConfig[]>([])
   const [activeProject, setActiveProject] = useState<ProjectConfig | null>(null)
   const [upstreamBranch, setUpstreamBranch] = useState<string>('main')
@@ -152,6 +155,21 @@ const TopToolbar: React.FC<TopToolbarProps> = () => {
       
       // 同步完成后重新加载分支列表
       await loadBranches(activeProject.path)
+      
+      // 同步文件状态
+      await fileService.syncFileStatuses(
+        activeProject.path,
+        activeProject.watchDirectories,
+        activeProject.fileTypes,
+        activeProject.upstreamBranch,
+        activeProject.workingBranch
+      )
+      
+      // 通知文件树刷新
+      if (onFileTreeRefresh) {
+        onFileTreeRefresh()
+      }
+      
       console.log('拉取上游分支完成')
     } catch (error) {
       console.error('拉取上游分支失败:', error)

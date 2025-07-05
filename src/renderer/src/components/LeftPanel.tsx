@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { configService } from '../services/configService'
+import { fileService, FileItem } from '../services/fileService'
 import { AppConfig, ProjectConfig } from '../types/config'
 import './LeftPanel.css'
 
@@ -11,43 +12,17 @@ interface LeftPanelProps {
   onFileSelect: (file: string) => void
 }
 
-interface FileItem {
-  name: string
-  path: string
-  status: 'translated' | 'outdated' | 'untranslated'
-  modified?: boolean
-  children?: FileItem[]
+interface LeftPanelRef {
+  refreshFiles: () => void
 }
 
-const mockFiles: FileItem[] = [
-  {
-    name: 'docs',
-    path: 'docs',
-    status: 'translated',
-    children: [
-      { name: 'README.md', path: 'docs/README.md', status: 'translated' },
-      { name: 'getting-started.md', path: 'docs/getting-started.md', status: 'outdated', modified: true },
-      { name: 'api.md', path: 'docs/api.md', status: 'untranslated' },
-    ]
-  },
-  {
-    name: 'guides',
-    path: 'guides',
-    status: 'outdated',
-    children: [
-      { name: 'installation.md', path: 'guides/installation.md', status: 'translated' },
-      { name: 'configuration.md', path: 'guides/configuration.md', status: 'untranslated' },
-    ]
-  }
-]
-
-const LeftPanel: React.FC<LeftPanelProps> = ({
+const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   activeTab,
   onTabChange,
   selectedFiles,
   onSelectedFilesChange,
   onFileSelect
-}) => {
+}, ref) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'translated' | 'outdated' | 'untranslated'>('all')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['docs', 'guides']))
   
@@ -66,6 +41,63 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
     fileTypes: ''
   })
   const [isSaving, setIsSaving] = useState(false)
+
+  // 文件树相关状态
+  const [files, setFiles] = useState<FileItem[]>([])
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false)
+
+  // 加载文件树
+  const loadFileTree = async (project: ProjectConfig) => {
+    if (!project) return
+
+    setIsLoadingFiles(true)
+    try {
+      const fileTree = await fileService.getFileTree(
+        project.path,
+        project.watchDirectories,
+        project.fileTypes,
+        project.upstreamBranch,
+        project.workingBranch
+      )
+      setFiles(fileTree)
+    } catch (error) {
+      console.error('加载文件树失败:', error)
+      setFiles([])
+    } finally {
+      setIsLoadingFiles(false)
+    }
+  }
+
+  // 同步文件状态
+  const syncFileStatuses = async (project: ProjectConfig) => {
+    if (!project) return
+
+    setIsLoadingFiles(true)
+    try {
+      await fileService.syncFileStatuses(
+        project.path,
+        project.watchDirectories,
+        project.fileTypes,
+        project.upstreamBranch,
+        project.workingBranch
+      )
+      // 重新加载文件树
+      await loadFileTree(project)
+    } catch (error) {
+      console.error('同步文件状态失败:', error)
+    } finally {
+      setIsLoadingFiles(false)
+    }
+  }
+
+  // 暴露给父组件的方法
+  useImperativeHandle(ref, () => ({
+    refreshFiles: () => {
+      if (activeProject) {
+        syncFileStatuses(activeProject)
+      }
+    }
+  }))
 
   // 加载配置
   useEffect(() => {
@@ -91,7 +123,7 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
     loadConfig()
 
     // 监听配置变化
-    const unsubscribe = configService.onConfigChange((newConfig) => {
+    const unsubscribe = configService.onConfigChange(async (newConfig) => {
       setConfig(newConfig)
       setSettingsForm(prev => ({
         ...prev,
@@ -114,14 +146,25 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             watchDirectories: active.watchDirectories.join(', '),
             fileTypes: active.fileTypes.join(', ')
           }))
+          
+          // 加载文件树
+          await loadFileTree(active)
         }
       } else {
         setActiveProject(null)
+        setFiles([])
       }
     })
 
     return unsubscribe
   }, [])
+
+  // 监听项目变化，自动加载文件树
+  useEffect(() => {
+    if (activeProject) {
+      loadFileTree(activeProject)
+    }
+  }, [activeProject])
 
   const handleSaveSettings = async () => {
     if (!config) return
@@ -168,6 +211,12 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
       ...prev,
       [field]: value
     }))
+  }
+
+  const handleRefreshFiles = async () => {
+    if (activeProject) {
+      await syncFileStatuses(activeProject)
+    }
   }
 
   const getStatusIcon = (status: string) => {
@@ -279,17 +328,41 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
             ⚪ 未翻译
           </button>
         </div>
-        {selectedFiles.length > 0 && (
+        <div className="action-buttons">
           <button 
-            className="btn btn-success btn-sm translate-btn"
-            onClick={handleTranslateSelected}
+            className="btn btn-sm refresh-btn"
+            onClick={handleRefreshFiles}
+            disabled={isLoadingFiles || !activeProject}
           >
-            翻译选中文件 ({selectedFiles.length})
+            {isLoadingFiles ? '刷新中...' : '刷新'}
           </button>
-        )}
+          {selectedFiles.length > 0 && (
+            <button 
+              className="btn btn-success btn-sm translate-btn"
+              onClick={handleTranslateSelected}
+            >
+              翻译选中文件 ({selectedFiles.length})
+            </button>
+          )}
+        </div>
       </div>
       <div className="file-tree">
-        {renderFileTree(filterFiles(mockFiles))}
+        {isLoadingFiles ? (
+          <div className="loading-state">
+            <div className="loading-spinner">⏳</div>
+            <p>加载文件中...</p>
+          </div>
+        ) : !activeProject ? (
+          <div className="empty-state">
+            <p>请先选择一个项目</p>
+          </div>
+        ) : files.length === 0 ? (
+          <div className="empty-state">
+            <p>未找到符合条件的文件</p>
+          </div>
+        ) : (
+          renderFileTree(filterFiles(files))
+        )}
       </div>
     </div>
   )
@@ -485,6 +558,8 @@ const LeftPanel: React.FC<LeftPanelProps> = ({
       </div>
     </div>
   )
-}
+})
+
+LeftPanel.displayName = 'LeftPanel'
 
 export default LeftPanel 

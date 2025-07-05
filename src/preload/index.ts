@@ -16,6 +16,14 @@ const api = {
     getActiveProject: () => ipcRenderer.invoke('config:get-active-project'),
     getBranches: (projectPath: string) => ipcRenderer.invoke('config:get-branches', projectPath),
     fetchUpstream: (projectPath: string) => ipcRenderer.invoke('config:fetch-upstream', projectPath)
+  },
+  files: {
+    getFileTree: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => 
+      ipcRenderer.invoke('files:get-file-tree', projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch),
+    getFileStatus: (projectPath: string, filePath: string, upstreamBranch: string, workingBranch: string) => 
+      ipcRenderer.invoke('files:get-file-status', projectPath, filePath, upstreamBranch, workingBranch),
+    syncFileStatuses: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => 
+      ipcRenderer.invoke('files:sync-file-statuses', projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
   }
 }
 
