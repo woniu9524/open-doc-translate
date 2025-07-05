@@ -60,6 +60,18 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   const [isLoadingGit, setIsLoadingGit] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
 
+  // 获取所有文件夹路径
+  const getAllFolderPaths = (items: FileItem[]): string[] => {
+    const paths: string[] = []
+    items.forEach(item => {
+      if (item.children) {
+        paths.push(item.path)
+        paths.push(...getAllFolderPaths(item.children))
+      }
+    })
+    return paths
+  }
+
   // 加载文件树
   const loadFileTree = async (project: ProjectConfig) => {
     if (!project) return
@@ -74,6 +86,10 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         project.workingBranch
       )
       setFiles(fileTree)
+      
+      // 自动展开所有文件夹
+      const allFolderPaths = getAllFolderPaths(fileTree)
+      setExpandedFolders(new Set(allFolderPaths))
     } catch (error) {
       console.error('加载文件树失败:', error)
       setFiles([])
@@ -421,11 +437,17 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
           onClick={(e) => handleFileSelect(file, e.ctrlKey)}
         >
           {file.children && (
-            <span className={`folder-icon ${expandedFolders.has(file.path) ? 'expanded' : ''}`}>
-              ▶
+            <span 
+              className={`folder-icon ${expandedFolders.has(file.path) ? 'expanded' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleFolder(file.path)
+              }}
+            >
+              {expandedFolders.has(file.path) ? '📂' : '📁'}
             </span>
           )}
-          <span className="file-status">{getStatusIcon(file.status)}</span>
+          {!file.children && <span className="file-status">{getStatusIcon(file.status)}</span>}
           <span className="file-name">{file.name}</span>
           {file.modified && <span className="modified-indicator">M</span>}
         </div>
@@ -798,11 +820,13 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
             <input 
               type="text" 
               className="input" 
-              placeholder="docs, guides"
+              placeholder="留空则扫描整个项目（如：docs, guides）"
               value={settingsForm.watchDirectories}
               onChange={(e) => handleFormChange('watchDirectories', e.target.value)}
             />
-            <small className="help-text">用逗号分隔多个目录</small>
+            <small className="help-text">
+              用逗号分隔多个目录，留空则扫描整个项目。会自动使用项目下的.gitignore文件排除不需要的文件和目录。
+            </small>
           </div>
           <div className="setting-item">
             <label>文件类型:</label>

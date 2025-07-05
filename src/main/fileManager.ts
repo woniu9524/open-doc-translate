@@ -1,7 +1,8 @@
 import { promises as fs } from 'fs'
-import { join, relative, extname, basename, dirname } from 'path'
+import { join, relative, extname, basename, dirname, sep } from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import ignore from 'ignore'
 import { LLMService } from './llmService'
 import { ConfigManager } from './config'
 
@@ -27,9 +28,20 @@ export class FileManager {
   private statusCache: Map<string, FileStatus> = new Map()
   private llmService: LLMService
   private upstreamHashCache: Map<string, Map<string, string>> = new Map() // 缓存上游分支的文件哈希
+  private gitignoreCache: Map<string, any> = new Map() // 缓存gitignore规则
 
   constructor(configManager: ConfigManager) {
     this.llmService = new LLMService(configManager)
+  }
+
+  // 标准化路径分隔符 - 统一使用当前系统的路径分隔符
+  private normalizePath(path: string): string {
+    return path.replace(/[/\\]/g, sep)
+  }
+
+  // 获取路径的分隔符数组
+  private getPathParts(path: string): string[] {
+    return this.normalizePath(path).split(sep)
   }
 
   private getStatusFilePath(projectPath: string, workingBranch: string): string {
@@ -100,10 +112,10 @@ export class FileManager {
   // 获取文件的Git commit hash
   private async getFileHash(projectPath: string, filePath: string, branch: string): Promise<string | null> {
     try {
-      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
-      const normalizedPath = filePath.replace(/\\/g, '/')
+      // 将路径标准化为 Git 兼容的正斜杠格式
+      const gitPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
-        `git log -1 --format="%H" ${branch} -- "${normalizedPath}"`,
+        `git log -1 --format="%H" ${branch} -- "${gitPath}"`,
         { cwd: projectPath }
       )
       return stdout.trim() || null
@@ -116,10 +128,10 @@ export class FileManager {
   // 检查文件是否在工作分支中被修改
   private async isFileModified(projectPath: string, filePath: string, workingBranch: string): Promise<boolean> {
     try {
-      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
-      const normalizedPath = filePath.replace(/\\/g, '/')
+      // 将路径标准化为 Git 兼容的正斜杠格式
+      const gitPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
-        `git status --porcelain "${normalizedPath}"`,
+        `git status --porcelain "${gitPath}"`,
         { cwd: projectPath }
       )
       return stdout.trim().length > 0
@@ -132,9 +144,9 @@ export class FileManager {
   // 检查文件是否存在于工作分支
   private async fileExistsInBranch(projectPath: string, filePath: string, branch: string): Promise<boolean> {
     try {
-      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
-      const normalizedPath = filePath.replace(/\\/g, '/')
-      await execAsync(`git cat-file -e ${branch}:"${normalizedPath}"`, { cwd: projectPath })
+      // 将路径标准化为 Git 兼容的正斜杠格式
+      const gitPath = filePath.replace(/\\/g, '/')
+      await execAsync(`git cat-file -e ${branch}:"${gitPath}"`, { cwd: projectPath })
       return true
     } catch (error) {
       return false
@@ -225,12 +237,84 @@ export class FileManager {
     }
   }
 
-  // 扫描目录获取文件列表
+  // 加载并解析.gitignore文件
+  private async loadGitignore(projectPath: string): Promise<any> {
+    const cacheKey = projectPath
+    
+    // 检查缓存
+    if (this.gitignoreCache.has(cacheKey)) {
+      return this.gitignoreCache.get(cacheKey)
+    }
+
+    const ig = ignore()
+    const gitignorePath = join(projectPath, '.gitignore')
+    
+    try {
+      // 读取.gitignore文件
+      const gitignoreContent = await fs.readFile(gitignorePath, 'utf-8')
+      ig.add(gitignoreContent)
+      
+      // 添加一些默认的忽略规则
+      ig.add([
+        '.git',
+        '.git/**',
+        'node_modules',
+        'node_modules/**',
+        '.DS_Store',
+        'Thumbs.db',
+        '.vscode',
+        '.idea'
+      ])
+      
+      console.log(`加载.gitignore文件: ${gitignorePath}`)
+    } catch (error) {
+      console.log(`未找到.gitignore文件或读取失败: ${gitignorePath}，使用默认忽略规则`)
+      
+      // 如果没有.gitignore文件，使用默认的忽略规则
+      ig.add([
+        '.git',
+        '.git/**',
+        'node_modules',
+        'node_modules/**',
+        '.DS_Store',
+        'Thumbs.db',
+        '.vscode',
+        '.idea',
+        '*.log',
+        '*.tmp',
+        '*.cache',
+        'dist',
+        'build',
+        'out',
+        '.env',
+        '.env.*'
+      ])
+    }
+    
+    // 缓存结果
+    this.gitignoreCache.set(cacheKey, ig)
+    return ig
+  }
+
+  // 检查路径是否应该被忽略
+  private shouldIgnorePath(ig: any, relativePath: string): boolean {
+    try {
+      // 标准化路径 - 使用正斜杠
+      const normalizedPath = relativePath.replace(/\\/g, '/')
+      return ig.ignores(normalizedPath)
+    } catch (error) {
+      console.error(`检查忽略路径失败: ${relativePath}`, error)
+      return false
+    }
+  }
+
+  // 扫描目录获取文件列表（支持gitignore过滤）
   private async scanDirectory(
     projectPath: string,
     dirPath: string,
     fileTypes: string[],
-    relativePath: string = ''
+    relativePath: string = '',
+    ig?: any
   ): Promise<string[]> {
     const files: string[] = []
     const fullPath = join(projectPath, dirPath)
@@ -242,9 +326,14 @@ export class FileManager {
         const entryPath = join(dirPath, entry.name)
         const relativeEntryPath = relativePath ? join(relativePath, entry.name) : entry.name
 
+        // 检查是否应该忽略这个路径
+        if (ig && this.shouldIgnorePath(ig, entryPath)) {
+          continue
+        }
+
         if (entry.isDirectory()) {
           // 递归扫描子目录
-          const subFiles = await this.scanDirectory(projectPath, entryPath, fileTypes, relativeEntryPath)
+          const subFiles = await this.scanDirectory(projectPath, entryPath, fileTypes, relativeEntryPath, ig)
           files.push(...subFiles)
         } else if (entry.isFile()) {
           // 检查文件类型
@@ -266,11 +355,12 @@ export class FileManager {
     const tree: FileItem[] = []
     const pathMap = new Map<string, FileItem>()
 
-    // 按路径深度排序
-    files.sort((a, b) => a.split('/').length - b.split('/').length)
+    // 按路径深度排序 - 使用跨平台的路径处理
+    files.sort((a, b) => this.getPathParts(a).length - this.getPathParts(b).length)
 
     for (const filePath of files) {
-      const parts = filePath.split('/')
+      // 使用跨平台的路径分割
+      const parts = this.getPathParts(filePath)
       const fileName = parts[parts.length - 1]
       const status = statusMap.get(filePath)
 
@@ -288,7 +378,7 @@ export class FileManager {
         pathMap.set(filePath, fileItem)
       } else {
         // 子目录文件
-        const parentPath = parts.slice(0, -1).join('/')
+        const parentPath = parts.slice(0, -1).join(sep)
         let parent = pathMap.get(parentPath)
 
         if (!parent) {
@@ -353,6 +443,9 @@ export class FileManager {
     const hashKeysToDelete = Array.from(this.upstreamHashCache.keys()).filter(key => key.startsWith(`${projectPath}:`))
     hashKeysToDelete.forEach(key => this.upstreamHashCache.delete(key))
     
+    // 清除gitignore缓存
+    this.gitignoreCache.delete(projectPath)
+    
     console.log(`清除项目 ${projectPath} 的所有缓存`)
   }
 
@@ -365,6 +458,9 @@ export class FileManager {
     
     // 清理上游哈希缓存
     this.clearUpstreamHashCache(projectPath, upstreamBranch)
+    
+    // 清理gitignore缓存
+    this.gitignoreCache.delete(projectPath)
     
     console.log(`清除项目 ${projectPath} 分支 ${workingBranch}/${upstreamBranch} 的缓存`)
   }
@@ -384,10 +480,18 @@ export class FileManager {
     const hashMap = new Map<string, string>()
     
     try {
-      // 使用 git ls-tree 批量获取所有文件的 blob 哈希
-      const dirArgs = watchDirectories.map(dir => `"${dir.replace(/\\/g, '/')}"`).join(' ')
+      // 如果监听目录为空或只有'.'，获取整个仓库的文件
+      let dirArgs = ''
+      if (!watchDirectories || watchDirectories.length === 0 || (watchDirectories.length === 1 && watchDirectories[0] === '.')) {
+        // 不指定目录，获取所有文件
+        dirArgs = ''
+      } else {
+        // 指定目录
+        dirArgs = '-- ' + watchDirectories.map(dir => `"${dir.replace(/\\/g, '/')}"`).join(' ')
+      }
+      
       const { stdout } = await execAsync(
-        `git ls-tree -r upstream/${upstreamBranch} -- ${dirArgs}`,
+        `git ls-tree -r upstream/${upstreamBranch} ${dirArgs}`,
         { cwd: projectPath }
       )
       
@@ -399,8 +503,8 @@ export class FileManager {
         if (match) {
           const [, , type, blobHash, filePath] = match
           if (type === 'blob') {
-            // 标准化路径格式
-            const normalizedPath = filePath.replace(/\//g, '\\')
+            // 标准化路径格式 - 使用系统路径分隔符
+            const normalizedPath = this.normalizePath(filePath)
             hashMap.set(normalizedPath, blobHash)
           }
         }
@@ -419,10 +523,10 @@ export class FileManager {
   // 获取文件的blob哈希值
   private async getFileBlobHash(projectPath: string, filePath: string, branch: string): Promise<string | null> {
     try {
-      // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
-      const normalizedPath = filePath.replace(/\\/g, '/')
+      // 将路径标准化为 Git 兼容的正斜杠格式
+      const gitPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
-        `git ls-tree ${branch} "${normalizedPath}"`,
+        `git ls-tree ${branch} "${gitPath}"`,
         { cwd: projectPath }
       )
       
@@ -451,8 +555,8 @@ export class FileManager {
         const match = line.match(/^(..)(.+)$/)
         if (match) {
           const [, status, filePath] = match
-          // 标准化路径格式
-          const normalizedPath = filePath.trim().replace(/\//g, '\\')
+          // 标准化路径格式 - 使用系统路径分隔符
+          const normalizedPath = this.normalizePath(filePath.trim())
           modifiedMap.set(normalizedPath, true)
         }
       }
@@ -517,10 +621,21 @@ export class FileManager {
     
     await this.loadStatusCache(projectPath, workingBranch)
 
+    // 加载.gitignore规则
+    const ig = await this.loadGitignore(projectPath)
+
+    // 确定扫描目录
+    let dirsToScan = watchDirectories
+    if (!watchDirectories || watchDirectories.length === 0) {
+      // 如果监听目录为空，扫描整个项目根目录
+      dirsToScan = ['.']
+      console.log('监听目录为空，将扫描整个项目目录')
+    }
+
     // 扫描所有监听目录
     const allFiles: string[] = []
-    for (const dir of watchDirectories) {
-      const files = await this.scanDirectory(projectPath, dir, fileTypes)
+    for (const dir of dirsToScan) {
+      const files = await this.scanDirectory(projectPath, dir, fileTypes, '', ig)
       allFiles.push(...files)
     }
 
@@ -528,7 +643,7 @@ export class FileManager {
 
     // 批量获取上游文件哈希和修改状态
     const [upstreamHashMap, modifiedMap] = await Promise.all([
-      this.getBatchUpstreamHashes(projectPath, watchDirectories, upstreamBranch),
+      this.getBatchUpstreamHashes(projectPath, dirsToScan, upstreamBranch),
       this.getBatchModifiedStatus(projectPath)
     ])
 
@@ -576,6 +691,9 @@ export class FileManager {
     // 清除上游哈希缓存，确保获取最新的上游文件状态
     this.clearUpstreamHashCache(projectPath, upstreamBranch)
     
+    // 清除gitignore缓存，确保获取最新的忽略规则
+    this.gitignoreCache.delete(projectPath)
+    
     // 重新获取文件树（会自动计算状态）
     await this.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)
   }
@@ -588,10 +706,9 @@ export class FileManager {
   ): Promise<string> {
     try {
       if (branch) {
-        // 从指定分支读取文件
-        // 将 Windows 路径分隔符转换为 Unix 风格的正斜杠，以兼容 Git 命令
-        const normalizedPath = filePath.replace(/\\/g, '/')
-        const { stdout } = await execAsync(`git show ${branch}:"${normalizedPath}"`, { cwd: projectPath })
+        // 从指定分支读取文件 - 将路径标准化为 Git 兼容的正斜杠格式
+        const gitPath = filePath.replace(/\\/g, '/')
+        const { stdout } = await execAsync(`git show ${branch}:"${gitPath}"`, { cwd: projectPath })
         return stdout
       } else {
         // 从本地文件系统读取文件

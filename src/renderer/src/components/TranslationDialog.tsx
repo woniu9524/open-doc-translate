@@ -94,6 +94,34 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
     })
   }
 
+  // 文件夹选择处理
+  const handleFolderSelect = (folderPath: string, children: FileItem[]) => {
+    const childFilePaths = getAllFilePaths(children)
+    const allSelected = childFilePaths.every(path => selectedFiles.includes(path))
+    
+    setSelectedFiles(prev => {
+      if (allSelected) {
+        // 如果全部选中，则取消选择
+        return prev.filter(f => !childFilePaths.includes(f))
+      } else {
+        // 如果未全部选中，则全选
+        const newSelected = new Set(prev)
+        childFilePaths.forEach(path => newSelected.add(path))
+        return Array.from(newSelected)
+      }
+    })
+  }
+
+  // 检查文件夹是否被选中（部分选中或全选）
+  const getFolderCheckState = (children: FileItem[]): 'none' | 'partial' | 'all' => {
+    const childFilePaths = getAllFilePaths(children)
+    const selectedCount = childFilePaths.filter(path => selectedFiles.includes(path)).length
+    
+    if (selectedCount === 0) return 'none'
+    if (selectedCount === childFilePaths.length) return 'all'
+    return 'partial'
+  }
+
   // 开始翻译
   const handleStartTranslation = async () => {
     if (selectedFiles.length === 0) {
@@ -168,21 +196,41 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
           className={`file-item ${selectedFiles.includes(item.path) ? 'selected' : ''}`}
           style={{ paddingLeft: `${level * 16 + 8}px` }}
         >
-          {!item.children && (
-            <input
-              type="checkbox"
-              checked={selectedFiles.includes(item.path)}
-              onChange={() => handleFileSelect(item.path)}
-              className="file-checkbox"
-            />
-          )}
-          <span className="file-status">{getStatusIcon(item.status)}</span>
-          <span className="file-name">{item.name}</span>
-          {item.modified && <span className="modified-indicator">M</span>}
-          {progress.results[item.path] && (
-            <span className={`translation-result ${progress.results[item.path].success ? 'success' : 'error'}`}>
-              {progress.results[item.path].success ? '✓' : '✗'}
-            </span>
+          {item.children ? (
+            // 文件夹
+            <>
+              <input
+                type="checkbox"
+                checked={getFolderCheckState(item.children) === 'all'}
+                ref={input => {
+                  if (input && item.children) {
+                    input.indeterminate = getFolderCheckState(item.children) === 'partial'
+                  }
+                }}
+                onChange={() => item.children && handleFolderSelect(item.path, item.children)}
+                className="file-checkbox"
+              />
+              <span className="folder-icon">📁</span>
+              <span className="file-name">{item.name}</span>
+            </>
+          ) : (
+            // 文件
+            <>
+              <input
+                type="checkbox"
+                checked={selectedFiles.includes(item.path)}
+                onChange={() => handleFileSelect(item.path)}
+                className="file-checkbox"
+              />
+              <span className="file-status">{getStatusIcon(item.status)}</span>
+              <span className="file-name">{item.name}</span>
+              {item.modified && <span className="modified-indicator">M</span>}
+              {progress.results[item.path] && (
+                <span className={`translation-result ${progress.results[item.path].success ? 'success' : 'error'}`}>
+                  {progress.results[item.path].success ? '✓' : '✗'}
+                </span>
+              )}
+            </>
           )}
         </div>
         {item.children && (

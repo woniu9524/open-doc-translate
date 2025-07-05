@@ -176,15 +176,12 @@
 }
 
 .folder-icon {
-  font-size: 10px;
+  font-size: 12px;
   color: #6b7280;
-  transition: transform 0.2s;
-  width: 12px;
+  width: 16px;
   display: inline-block;
-}
-
-.folder-icon.expanded {
-  transform: rotate(90deg);
+  cursor: pointer;
+  text-align: center;
 }
 
 .file-status {
