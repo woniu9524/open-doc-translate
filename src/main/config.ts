@@ -3,10 +3,36 @@ import { join } from 'path'
 import { promises as fs } from 'fs'
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { ProjectConfig, AppConfig } from '../renderer/src/types/config'
 
 const execAsync = promisify(exec)
 const CONFIG_FILE = 'opendoc-config.json'
+
+export interface ProjectConfig {
+  name: string
+  path: string
+  originUrl: string
+  upstreamUrl: string
+  upstreamBranch: string
+  workingBranch: string
+  watchDirectories: string[]
+  fileTypes: string[]
+  lastSyncHash?: string
+  customPrompt?: string
+}
+
+export interface AppConfig {
+  projects: ProjectConfig[]
+  activeProjectPath?: string
+  llmConfig: {
+    apiKey: string
+    model: string
+    baseUrl?: string
+    temperature?: number
+    maxTokens?: number
+    concurrency?: number
+  }
+  globalPrompt: string
+}
 
 export class ConfigManager {
   private configPath: string
@@ -23,7 +49,8 @@ export class ConfigManager {
       llmConfig: {
         apiKey: '',
         model: 'gpt-4',
-        baseUrl: 'https://openrouter.ai/api/v1'
+        baseUrl: 'https://openrouter.ai/api/v1',
+        concurrency: 3
       },
       globalPrompt: '你是一个专业的技术文档翻译助手。请将以下英文文档翻译成中文，保持原有的格式和结构，确保技术术语的准确性。'
     }

@@ -18,6 +18,7 @@ interface TranslationProgress {
   completed: number
   failed: number
   current: string
+  currentFiles: string[]
   isTranslating: boolean
   results: { [filePath: string]: { success: boolean; error?: string } }
 }
@@ -48,6 +49,7 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
     completed: 0,
     failed: 0,
     current: '',
+    currentFiles: [],
     isTranslating: false,
     results: {}
   })
@@ -146,21 +148,48 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
       return
     }
 
+    const concurrency = config.llmConfig.concurrency || 3
+
     setProgress({
       total: selectedFiles.length,
       completed: 0,
       failed: 0,
       current: '',
+      currentFiles: [],
       isTranslating: true,
       results: {}
     })
 
     try {
-      for (let i = 0; i < selectedFiles.length; i++) {
-        const filePath = selectedFiles[i]
+      // 使用并发翻译
+      await translateWithConcurrency(selectedFiles, concurrency)
+    } finally {
+      setProgress(prev => ({
+        ...prev,
+        isTranslating: false,
+        current: ''
+      }))
+    }
+  }
+
+  // 并发翻译函数
+  const translateWithConcurrency = async (files: string[], concurrency: number) => {
+    const results = new Map<string, { success: boolean; error?: string }>()
+    let completed = 0
+    let failed = 0
+    let index = 0
+
+    // 创建并发任务处理器
+    const processFile = async (): Promise<void> => {
+      while (index < files.length) {
+        const currentIndex = index++
+        const filePath = files[currentIndex]
+        
+        // 更新当前处理的文件 - 添加到处理队列
         setProgress(prev => ({
           ...prev,
-          current: filePath
+          current: prev.currentFiles.length === 0 ? filePath : prev.current,
+          currentFiles: [...prev.currentFiles, filePath]
         }))
 
         try {
@@ -171,32 +200,33 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
             workingBranch
           )
           
-          setProgress(prev => ({
-            ...prev,
-            completed: prev.completed + 1,
-            results: {
-              ...prev.results,
-              [filePath]: { success: true }
-            }
-          }))
+          completed++
+          results.set(filePath, { success: true })
         } catch (error) {
-          setProgress(prev => ({
-            ...prev,
-            failed: prev.failed + 1,
-            results: {
-              ...prev.results,
-              [filePath]: { success: false, error: (error as Error).message }
-            }
-          }))
+          failed++
+          results.set(filePath, { success: false, error: (error as Error).message })
         }
+
+        // 更新进度 - 从处理队列中移除
+        setProgress(prev => {
+          const newCurrentFiles = prev.currentFiles.filter(f => f !== filePath)
+          return {
+            ...prev,
+            completed,
+            failed,
+            current: newCurrentFiles.length > 0 ? newCurrentFiles[0] : '',
+            currentFiles: newCurrentFiles,
+            results: Object.fromEntries(results)
+          }
+        })
       }
-    } finally {
-      setProgress(prev => ({
-        ...prev,
-        isTranslating: false,
-        current: ''
-      }))
     }
+
+    // 创建并发任务
+    const tasks = Array.from({ length: concurrency }, () => processFile())
+    
+    // 等待所有任务完成
+    await Promise.all(tasks)
   }
 
   // 渲染文件树
@@ -325,8 +355,17 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
             <div className="progress-section">
               <div className="progress-info">
                 <div className="progress-text">
-                  正在翻译: {progress.current}
+                  正在翻译: {progress.currentFiles.length > 0 ? `${progress.currentFiles.length} 个文件` : '准备中...'}
                 </div>
+                {progress.currentFiles.length > 0 && (
+                  <div className="current-files">
+                    {progress.currentFiles.map((filePath, index) => (
+                      <div key={filePath} className="current-file">
+                        {index + 1}. {filePath}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="progress-stats">
                   进度: {progress.completed + progress.failed} / {progress.total} 
                   (成功: {progress.completed}, 失败: {progress.failed})

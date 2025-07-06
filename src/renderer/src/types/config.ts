@@ -20,6 +20,7 @@ export interface AppConfig {
     baseUrl?: string
     temperature?: number
     maxTokens?: number
+    concurrency?: number
   }
   globalPrompt: string
 }

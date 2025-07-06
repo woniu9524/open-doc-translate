@@ -321,4 +321,28 @@
 
 .file-children {
   margin-left: 16px;
+}
+
+.current-files {
+  background-color: #f0f8ff;
+  border: 1px solid #e0f2fe;
+  border-radius: 4px;
+  padding: 8px;
+  margin: 8px 0;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.current-file {
+  font-size: 12px;
+  color: #0369a1;
+  margin-bottom: 2px;
+  padding: 2px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.current-file:last-child {
+  margin-bottom: 0;
 } 

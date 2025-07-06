@@ -39,6 +39,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     baseUrl: '',
     temperature: 0.3,
     maxTokens: 4000,
+    concurrency: 3,
     globalPrompt: '',
     customPrompt: '',
     originUrl: '',
@@ -248,6 +249,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
             baseUrl: loadedConfig.llmConfig.baseUrl || '',
             temperature: loadedConfig.llmConfig.temperature || 0.3,
             maxTokens: loadedConfig.llmConfig.maxTokens || 4000,
+            concurrency: loadedConfig.llmConfig.concurrency || 3,
             globalPrompt: loadedConfig.globalPrompt
           }))
         }
@@ -268,6 +270,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         baseUrl: newConfig.llmConfig.baseUrl || '',
         temperature: newConfig.llmConfig.temperature || 0.3,
         maxTokens: newConfig.llmConfig.maxTokens || 4000,
+        concurrency: newConfig.llmConfig.concurrency || 3,
         globalPrompt: newConfig.globalPrompt
       }))
       
@@ -318,7 +321,8 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
           model: settingsForm.model,
           baseUrl: settingsForm.baseUrl,
           temperature: settingsForm.temperature,
-          maxTokens: settingsForm.maxTokens
+          maxTokens: settingsForm.maxTokens,
+          concurrency: settingsForm.concurrency
         },
         globalPrompt: settingsForm.globalPrompt
       }
@@ -352,6 +356,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
       ...prev,
       [field]: field === 'temperature' ? parseFloat(value) || 0.3 : 
                field === 'maxTokens' ? parseInt(value) || 32000 : 
+               field === 'concurrency' ? parseInt(value) || 3 : 
                value
     }))
   }
@@ -756,6 +761,21 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
           />
           <small className="help-text">
             最大输出token数量，控制回复长度
+          </small>
+        </div>
+        <div className="setting-item">
+          <label>Concurrency:</label>
+          <input 
+            type="number" 
+            className="input"
+            placeholder="3"
+            min="1"
+            max="10"
+            value={settingsForm.concurrency}
+            onChange={(e) => handleFormChange('concurrency', e.target.value)}
+          />
+          <small className="help-text">
+            并发翻译任务数量，控制同时翻译的文件数量
           </small>
         </div>
       </div>
