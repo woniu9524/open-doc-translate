@@ -27,6 +27,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   onFileSelect
 }, ref) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'translated' | 'outdated' | 'untranslated'>('all')
+  const [fileTypeFilter, setFileTypeFilter] = useState<string[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['docs', 'guides']))
   const [isTranslationDialogOpen, setIsTranslationDialogOpen] = useState(false)
   
@@ -60,6 +61,41 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   const [currentBranch, setCurrentBranch] = useState('')
   const [isLoadingGit, setIsLoadingGit] = useState(false)
   const [isCommitting, setIsCommitting] = useState(false)
+
+  // 获取所有文件类型
+  const getAllFileTypes = (): string[] => {
+    const types = new Set<string>()
+    const extractTypes = (items: FileItem[]) => {
+      items.forEach(item => {
+        if (item.children) {
+          extractTypes(item.children)
+        } else {
+          const extension = item.name.split('.').pop()
+          if (extension) {
+            types.add(`.${extension}`)
+          }
+        }
+      })
+    }
+    extractTypes(files)
+    return Array.from(types).sort()
+  }
+
+  // 处理文件类型筛选
+  const handleFileTypeToggle = (fileType: string) => {
+    setFileTypeFilter(prev => {
+      if (prev.includes(fileType)) {
+        return prev.filter(type => type !== fileType)
+      } else {
+        return [...prev, fileType]
+      }
+    })
+  }
+
+  // 重置文件类型筛选
+  const resetFileTypeFilter = () => {
+    setFileTypeFilter([])
+  }
 
   // 获取所有文件夹路径
   const getAllFolderPaths = (items: FileItem[]): string[] => {
@@ -420,13 +456,21 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   }
 
   const filterFiles = (files: FileItem[]): FileItem[] => {
-    if (statusFilter === 'all') return files
     return files.filter(file => {
       if (file.children) {
         const filteredChildren = filterFiles(file.children)
         return filteredChildren.length > 0
       }
-      return file.status === statusFilter
+      
+      // 状态筛选
+      const statusMatch = statusFilter === 'all' || file.status === statusFilter
+      
+      // 文件类型筛选
+      const fileExtension = file.name.split('.').pop()
+      const typeMatch = fileTypeFilter.length === 0 || 
+        (fileExtension && fileTypeFilter.includes(`.${fileExtension}`))
+      
+      return statusMatch && typeMatch
     }).map(file => ({
       ...file,
       children: file.children ? filterFiles(file.children) : undefined
@@ -465,80 +509,115 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     ))
   }
 
-  const renderExplorer = () => (
-    <div className="explorer-content">
-      <div className="filter-section">
-        <div className="filter-buttons">
-          <button 
-            className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : ''}`}
-            onClick={() => setStatusFilter('all')}
-          >
-            全部
-          </button>
-          <button 
-            className={`btn btn-sm ${statusFilter === 'translated' ? 'btn-primary' : ''}`}
-            onClick={() => setStatusFilter('translated')}
-          >
-            🟢 已翻译
-          </button>
-          <button 
-            className={`btn btn-sm ${statusFilter === 'outdated' ? 'btn-primary' : ''}`}
-            onClick={() => setStatusFilter('outdated')}
-          >
-            🟡 已过时
-          </button>
-          <button 
-            className={`btn btn-sm ${statusFilter === 'untranslated' ? 'btn-primary' : ''}`}
-            onClick={() => setStatusFilter('untranslated')}
-          >
-            ⚪ 未翻译
-          </button>
-        </div>
-        <div className="action-buttons">
-          <button 
-            className="btn btn-sm refresh-btn"
-            onClick={handleRefreshFiles}
-            disabled={isLoadingFiles || !activeProject}
-          >
-            {isLoadingFiles ? '刷新中...' : '刷新'}
-          </button>
-          <button 
-            className="btn btn-primary btn-sm translate-btn"
-            onClick={handleOpenTranslationDialog}
-            disabled={!activeProject || isLoadingFiles}
-          >
-            📝 批量翻译
-          </button>
-          {selectedFiles.length > 0 && (
+  const renderExplorer = () => {
+    const availableFileTypes = getAllFileTypes()
+    
+    return (
+      <div className="explorer-content">
+        <div className="filter-section">
+          <div className="filter-buttons">
             <button 
-              className="btn btn-success btn-sm translate-btn"
-              onClick={handleTranslateSelected}
+              className={`btn btn-sm ${statusFilter === 'all' ? 'btn-primary' : ''}`}
+              onClick={() => setStatusFilter('all')}
             >
-              翻译选中文件 ({selectedFiles.length})
+              全部
             </button>
+            <button 
+              className={`btn btn-sm ${statusFilter === 'translated' ? 'btn-primary' : ''}`}
+              onClick={() => setStatusFilter('translated')}
+            >
+              🟢 已翻译
+            </button>
+            <button 
+              className={`btn btn-sm ${statusFilter === 'outdated' ? 'btn-primary' : ''}`}
+              onClick={() => setStatusFilter('outdated')}
+            >
+              🟡 已过时
+            </button>
+            <button 
+              className={`btn btn-sm ${statusFilter === 'untranslated' ? 'btn-primary' : ''}`}
+              onClick={() => setStatusFilter('untranslated')}
+            >
+              ⚪ 未翻译
+            </button>
+          </div>
+          
+          {availableFileTypes.length > 0 && (
+            <div className="file-type-filter">
+              <label>文件类型:</label>
+              <div className="file-type-options">
+                {availableFileTypes.map(fileType => (
+                  <label key={fileType} className="file-type-option">
+                    <input
+                      type="checkbox"
+                      checked={fileTypeFilter.includes(fileType)}
+                      onChange={() => handleFileTypeToggle(fileType)}
+                    />
+                    <span className="file-type-label">{fileType}</span>
+                  </label>
+                ))}
+                <button 
+                  className="btn btn-sm btn-secondary"
+                  onClick={resetFileTypeFilter}
+                  title="重置文件类型筛选"
+                >
+                  重置
+                </button>
+              </div>
+              {fileTypeFilter.length > 0 && (
+                <div className="selected-types">
+                  已选择: {fileTypeFilter.join(', ')}
+                </div>
+              )}
+            </div>
+          )}
+          
+          <div className="action-buttons">
+            <button 
+              className="btn btn-sm refresh-btn"
+              onClick={handleRefreshFiles}
+              disabled={isLoadingFiles || !activeProject}
+            >
+              {isLoadingFiles ? '刷新中...' : '刷新'}
+            </button>
+            <button 
+              className="btn btn-primary btn-sm translate-btn"
+              onClick={handleOpenTranslationDialog}
+              disabled={!activeProject || isLoadingFiles}
+            >
+              📝 批量翻译
+            </button>
+            {selectedFiles.length > 0 && (
+              <button 
+                className="btn btn-success btn-sm translate-btn"
+                onClick={handleTranslateSelected}
+              >
+                翻译选中文件 ({selectedFiles.length})
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="file-tree">
+          {isLoadingFiles ? (
+            <div className="loading-state">
+              <div className="loading-spinner">⏳</div>
+              <p>加载文件中...</p>
+            </div>
+          ) : !activeProject ? (
+            <div className="empty-state">
+              <p>请先选择一个项目</p>
+            </div>
+          ) : files.length === 0 ? (
+            <div className="empty-state">
+              <p>未找到符合条件的文件</p>
+            </div>
+          ) : (
+            renderFileTree(filterFiles(files))
           )}
         </div>
       </div>
-      <div className="file-tree">
-        {isLoadingFiles ? (
-          <div className="loading-state">
-            <div className="loading-spinner">⏳</div>
-            <p>加载文件中...</p>
-          </div>
-        ) : !activeProject ? (
-          <div className="empty-state">
-            <p>请先选择一个项目</p>
-          </div>
-        ) : files.length === 0 ? (
-          <div className="empty-state">
-            <p>未找到符合条件的文件</p>
-          </div>
-        ) : (
-          renderFileTree(filterFiles(files))
-        )}
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderGit = () => {
     const getStatusIcon = (status: string) => {

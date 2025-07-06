@@ -44,6 +44,8 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
 }) => {
   const [selectedFiles, setSelectedFiles] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState<'all' | 'translated' | 'outdated' | 'untranslated'>('all')
+  const [fileSizeFilter, setFileSizeFilter] = useState<{ min: number; max: number }>({ min: 0, max: Infinity })
+  const [fileTypeFilter, setFileTypeFilter] = useState<string[]>([])
   const [progress, setProgress] = useState<TranslationProgress>({
     total: 0,
     completed: 0,
@@ -54,6 +56,25 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
     results: {}
   })
 
+  // 获取所有文件类型
+  const getAllFileTypes = (): string[] => {
+    const types = new Set<string>()
+    const extractTypes = (items: FileItem[]) => {
+      items.forEach(item => {
+        if (item.children) {
+          extractTypes(item.children)
+        } else {
+          const extension = item.name.split('.').pop()
+          if (extension) {
+            types.add(`.${extension}`)
+          }
+        }
+      })
+    }
+    extractTypes(files)
+    return Array.from(types).sort()
+  }
+
   // 过滤文件
   const getFilteredFiles = (): FileItem[] => {
     const filterRecursive = (items: FileItem[]): FileItem[] => {
@@ -62,7 +83,20 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
           const filteredChildren = filterRecursive(item.children)
           return filteredChildren.length > 0
         }
-        return statusFilter === 'all' || item.status === statusFilter
+        
+        // 状态筛选
+        const statusMatch = statusFilter === 'all' || item.status === statusFilter
+        
+        // 文件大小筛选（转换为KB）
+        const fileSizeKB = item.size ? item.size / 1024 : 0
+        const sizeMatch = fileSizeKB >= fileSizeFilter.min && fileSizeKB <= fileSizeFilter.max
+        
+        // 文件类型筛选
+        const fileExtension = item.name.split('.').pop()
+        const typeMatch = fileTypeFilter.length === 0 || 
+          (fileExtension && fileTypeFilter.includes(`.${fileExtension}`))
+        
+        return statusMatch && sizeMatch && typeMatch
       }).map(item => ({
         ...item,
         children: item.children ? filterRecursive(item.children) : undefined
@@ -86,6 +120,23 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
 
   const filteredFiles = getFilteredFiles()
   const allFilePaths = getAllFilePaths(filteredFiles)
+  const availableFileTypes = getAllFileTypes()
+
+  // 处理文件类型筛选
+  const handleFileTypeToggle = (fileType: string) => {
+    setFileTypeFilter(prev => {
+      if (prev.includes(fileType)) {
+        return prev.filter(type => type !== fileType)
+      } else {
+        return [...prev, fileType]
+      }
+    })
+  }
+
+  // 重置文件类型筛选
+  const resetFileTypeFilter = () => {
+    setFileTypeFilter([])
+  }
 
   // 全选/取消全选
   const handleSelectAll = () => {
@@ -133,6 +184,20 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
     if (selectedCount === 0) return 'none'
     if (selectedCount === childFilePaths.length) return 'all'
     return 'partial'
+  }
+
+  // 处理文件大小筛选
+  const handleFileSizeFilterChange = (type: 'min' | 'max', value: string) => {
+    const numValue = value === '' ? (type === 'min' ? 0 : Infinity) : Number(value)
+    setFileSizeFilter(prev => ({
+      ...prev,
+      [type]: numValue
+    }))
+  }
+
+  // 重置文件大小筛选
+  const resetFileSizeFilter = () => {
+    setFileSizeFilter({ min: 0, max: Infinity })
   }
 
   // 开始翻译
@@ -332,6 +397,66 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
               >
                 🟢 已翻译
               </button>
+            </div>
+            
+            <div className="file-type-filter">
+              <label>文件类型筛选:</label>
+              <div className="file-type-options">
+                {availableFileTypes.map(fileType => (
+                  <label key={fileType} className="file-type-option">
+                    <input
+                      type="checkbox"
+                      checked={fileTypeFilter.includes(fileType)}
+                      onChange={() => handleFileTypeToggle(fileType)}
+                    />
+                    <span className="file-type-label">{fileType}</span>
+                  </label>
+                ))}
+                {availableFileTypes.length > 0 && (
+                  <button 
+                    className="btn btn-sm btn-secondary"
+                    onClick={resetFileTypeFilter}
+                    title="重置文件类型筛选"
+                  >
+                    重置
+                  </button>
+                )}
+              </div>
+              {fileTypeFilter.length > 0 && (
+                <div className="selected-types">
+                  已选择: {fileTypeFilter.join(', ')}
+                </div>
+              )}
+            </div>
+            
+            <div className="file-size-filter">
+              <label>文件大小筛选 (KB):</label>
+              <div className="size-filter-inputs">
+                <input
+                  type="number"
+                  placeholder="最小值"
+                  value={fileSizeFilter.min === 0 ? '' : fileSizeFilter.min}
+                  onChange={(e) => handleFileSizeFilterChange('min', e.target.value)}
+                  className="size-input"
+                  min="0"
+                />
+                <span>~</span>
+                <input
+                  type="number"
+                  placeholder="最大值"
+                  value={fileSizeFilter.max === Infinity ? '' : fileSizeFilter.max}
+                  onChange={(e) => handleFileSizeFilterChange('max', e.target.value)}
+                  className="size-input"
+                  min="0"
+                />
+                <button 
+                  className="btn btn-sm btn-secondary"
+                  onClick={resetFileSizeFilter}
+                  title="重置文件大小筛选"
+                >
+                  重置
+                </button>
+              </div>
             </div>
             
             <div className="selection-controls">
