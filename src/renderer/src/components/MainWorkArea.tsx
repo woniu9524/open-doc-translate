@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { fileService, FileContent } from '../services/fileService'
 import { configService } from '../services/configService'
-import { llmService } from '../services/llmService'
 import './MainWorkArea.css'
 
 interface MainWorkAreaProps {
@@ -63,7 +62,7 @@ const MainWorkArea: React.FC<MainWorkAreaProps> = ({ activeFile, onFileChange })
   }, [activeFile])
 
   const handleTranslate = async () => {
-    if (!fileContent) return
+    if (!fileContent || !activeFile) return
     
     setIsTranslating(true)
     try {
@@ -94,15 +93,25 @@ const MainWorkArea: React.FC<MainWorkAreaProps> = ({ activeFile, onFileChange })
         return
       }
 
-      // 使用真实的 LLM 翻译
-      const prompt = activeProject.customPrompt || config.globalPrompt
-      const response = await llmService.translateText({
-        content: fileContent.original,
-        prompt
-      })
+      // 使用主进程的翻译服务，通过 IPC 调用，避免 CSP 限制
+      await fileService.translateFile(
+        activeProject.path,
+        activeFile,
+        activeProject.upstreamBranch,
+        activeProject.workingBranch
+      )
       
-      setTranslatedContent(response.translatedContent)
-      setHasUnsavedChanges(true)
+      // 翻译完成后重新加载文件内容
+      const updatedContent = await fileService.getFileContent(
+        activeProject.path,
+        activeFile,
+        activeProject.upstreamBranch,
+        activeProject.workingBranch
+      )
+      
+      setFileContent(updatedContent)
+      setTranslatedContent(updatedContent.translated)
+      setHasUnsavedChanges(false) // 主进程翻译会自动保存
     } catch (error) {
       console.error('翻译失败:', error)
       alert('翻译失败: ' + (error as Error).message)
@@ -234,23 +243,20 @@ const MainWorkArea: React.FC<MainWorkAreaProps> = ({ activeFile, onFileChange })
           {hasUnsavedChanges && <span className="unsaved-indicator">● 未保存</span>}
         </div>
         <div className="action-buttons">
-          {fileContent.status === 'untranslated' && translatedContent === '' && (
-            <button 
-              className="btn btn-primary"
-              onClick={handleTranslate}
-              disabled={isTranslating}
-            >
-              {isTranslating ? '翻译中...' : '翻译此文件'}
-            </button>
-          )}
-          {hasUnsavedChanges && (
-            <button 
-              className="btn btn-success"
-              onClick={handleSave}
-            >
-              保存
-            </button>
-          )}
+          <button 
+            className="btn btn-primary"
+            onClick={handleTranslate}
+            disabled={isTranslating || !fileContent}
+          >
+            {isTranslating ? '翻译中...' : '重新翻译'}
+          </button>
+          <button 
+            className="btn btn-success"
+            onClick={handleSave}
+            disabled={!hasUnsavedChanges || !fileContent}
+          >
+            保存
+          </button>
         </div>
       </div>
 
@@ -278,32 +284,19 @@ const MainWorkArea: React.FC<MainWorkAreaProps> = ({ activeFile, onFileChange })
           <div className="pane-header">
             <h4>译文 (工作分支)</h4>
             {fileContent.status === 'untranslated' && translatedContent === '' && (
-              <span className="empty-indicator">点击"翻译此文件"开始</span>
+              <span className="empty-indicator">可以点击"重新翻译"或直接编辑</span>
             )}
           </div>
           <div className="editor-content">
-            {fileContent.status === 'untranslated' && translatedContent === '' ? (
-              <div className="empty-editor">
-                <div className="empty-editor-content">
-                  <div className="empty-icon">📝</div>
-                  <p>此文件尚未翻译</p>
-                  <button 
-                    className="btn btn-primary"
-                    onClick={handleTranslate}
-                    disabled={isTranslating}
-                  >
-                    {isTranslating ? '翻译中...' : '翻译此文件'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <textarea
-                className="code-editor"
-                value={translatedContent}
-                onChange={(e) => handleContentChange(e.target.value)}
-                placeholder="翻译内容..."
-              />
-            )}
+            <textarea
+              className="code-editor"
+              value={translatedContent}
+              onChange={(e) => handleContentChange(e.target.value)}
+              placeholder={fileContent.status === 'untranslated' && translatedContent === '' ? 
+                '此文件尚未翻译，可以点击上方"重新翻译"按钮自动翻译，或直接在此处输入译文...' : 
+                '翻译内容...'
+              }
+            />
           </div>
         </div>
       </div>
