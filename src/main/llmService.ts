@@ -36,6 +36,29 @@ export class LLMService {
     return config.llmConfig
   }
 
+  // 清理翻译结果中的代码块标记
+  private cleanTranslationResult(content: string): string {
+    // 先除去空格
+    let cleaned = content.trim()
+    
+    // 去掉开头的```json、```、```markdown等代码块标记
+    if (cleaned.startsWith('```')) {
+      // 找到第一个换行符或者第一个```结束标记
+      const firstNewline = cleaned.indexOf('\n')
+      if (firstNewline !== -1) {
+        cleaned = cleaned.substring(firstNewline + 1)
+      }
+    }
+    
+    // 去掉结尾的```标记
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.substring(0, cleaned.length - 3)
+    }
+    
+    // 再次去掉空格
+    return cleaned.trim()
+  }
+
   async translateText(request: TranslationRequest, projectPath?: string): Promise<TranslationResponse> {
     const config = this.getConfig()
     
@@ -83,9 +106,11 @@ export class LLMService {
         throw new Error('API 响应格式无效')
       }
 
-      console.log('API 响应:', data.choices[0].message.content)
+      
+      // 清理翻译结果
+      const cleanedContent = this.cleanTranslationResult(data.choices[0].message.content)
       return {
-        translatedContent: data.choices[0].message.content,
+        translatedContent: cleanedContent,
         model: config.model,
         usage: data.usage ? {
           promptTokens: data.usage.prompt_tokens,
