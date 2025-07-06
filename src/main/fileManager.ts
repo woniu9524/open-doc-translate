@@ -15,6 +15,7 @@ export interface FileItem {
   modified?: boolean
   children?: FileItem[]
   lastHash?: string
+  size?: number // 文件大小（字节）
 }
 
 export interface FileStatus {
@@ -350,8 +351,32 @@ export class FileManager {
     return files
   }
 
+  // 批量获取文件大小信息
+  private async getBatchFileSizes(
+    projectPath: string,
+    files: string[]
+  ): Promise<Map<string, number>> {
+    const sizeMap = new Map<string, number>()
+    
+    for (const filePath of files) {
+      try {
+        const fullPath = join(projectPath, filePath)
+        const stats = await fs.stat(fullPath)
+        if (stats.isFile()) {
+          sizeMap.set(filePath, stats.size)
+        }
+      } catch (error) {
+        console.error(`获取文件大小失败 ${filePath}:`, error)
+        // 如果获取失败，设置为0
+        sizeMap.set(filePath, 0)
+      }
+    }
+    
+    return sizeMap
+  }
+
   // 构建文件树结构
-  private buildFileTree(files: string[], statusMap: Map<string, FileStatus>): FileItem[] {
+  private buildFileTree(files: string[], statusMap: Map<string, FileStatus>, sizeMap: Map<string, number>): FileItem[] {
     const tree: FileItem[] = []
     const pathMap = new Map<string, FileItem>()
 
@@ -363,13 +388,15 @@ export class FileManager {
       const parts = this.getPathParts(filePath)
       const fileName = parts[parts.length - 1]
       const status = statusMap.get(filePath)
+      const size = sizeMap.get(filePath)
 
       const fileItem: FileItem = {
         name: fileName,
         path: filePath,
         status: status?.status || 'untranslated',
         modified: status?.modified || false,
-        lastHash: status?.lastHash
+        lastHash: status?.lastHash,
+        size: size || 0
       }
 
       if (parts.length === 1) {
@@ -641,10 +668,11 @@ export class FileManager {
 
     console.log(`扫描到 ${allFiles.length} 个文件`)
 
-    // 批量获取上游文件哈希和修改状态
-    const [upstreamHashMap, modifiedMap] = await Promise.all([
+    // 批量获取上游文件哈希、修改状态和文件大小
+    const [upstreamHashMap, modifiedMap, sizeMap] = await Promise.all([
       this.getBatchUpstreamHashes(projectPath, dirsToScan, upstreamBranch),
-      this.getBatchModifiedStatus(projectPath)
+      this.getBatchModifiedStatus(projectPath),
+      this.getBatchFileSizes(projectPath, allFiles)
     ])
 
     // 批量计算文件状态
@@ -658,7 +686,7 @@ export class FileManager {
     )
 
     // 构建文件树
-    const tree = this.buildFileTree(allFiles, statusMap)
+    const tree = this.buildFileTree(allFiles, statusMap, sizeMap)
 
     // 检查是否有已翻译的文件需要保存状态缓存
     const hasTranslatedFiles = Array.from(statusMap.values()).some(

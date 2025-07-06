@@ -157,6 +157,17 @@
   cursor: pointer;
 }
 
+.file-size {
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: 8px;
+  min-width: 50px;
+  text-align: center;
+}
+
 .modified-indicator {
   color: #f59e0b;
   font-size: 12px;

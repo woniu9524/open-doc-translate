@@ -5,6 +5,7 @@ export interface FileItem {
   modified?: boolean
   children?: FileItem[]
   lastHash?: string
+  size?: number // 文件大小（字节）
 }
 
 export interface FileStatus {

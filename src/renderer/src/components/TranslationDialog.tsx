@@ -22,6 +22,17 @@ interface TranslationProgress {
   results: { [filePath: string]: { success: boolean; error?: string } }
 }
 
+// 格式化文件大小
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B'
+  
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
 const TranslationDialog: React.FC<TranslationDialogProps> = ({
   isOpen,
   onClose,
@@ -224,6 +235,9 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
               />
               <span className="file-status">{getStatusIcon(item.status)}</span>
               <span className="file-name">{item.name}</span>
+              {item.size !== undefined && (
+                <span className="file-size">{formatFileSize(item.size)}</span>
+              )}
               {item.modified && <span className="modified-indicator">M</span>}
               {progress.results[item.path] && (
                 <span className={`translation-result ${progress.results[item.path].success ? 'success' : 'error'}`}>
