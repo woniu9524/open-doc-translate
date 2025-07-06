@@ -11,6 +11,15 @@ export interface ProjectConfig {
   customPrompt?: string
 }
 
+export interface PromptTemplate {
+  id: string
+  name: string
+  content: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AppConfig {
   projects: ProjectConfig[]
   activeProjectPath?: string
@@ -23,6 +32,7 @@ export interface AppConfig {
     concurrency?: number
   }
   globalPrompt: string
+  promptTemplates?: PromptTemplate[]
 }
 
 export interface FileStatus {

@@ -578,21 +578,22 @@
 }
 
 .settings-actions {
+  display: flex;
+  gap: 12px;
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #e9ecef;
-  text-align: right;
+  border-top: 1px solid #e5e7eb;
+}
+
+.prompt-template-actions {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .settings-actions .btn {
-  padding: 10px 20px;
+  padding: 8px 16px;
   font-size: 14px;
-  font-weight: 500;
-}
-
-.settings-actions .btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* TopToolbar 项目信息样式 */

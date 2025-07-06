@@ -2,9 +2,10 @@ import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'rea
 import { configService } from '../services/configService'
 import { fileService, FileItem } from '../services/fileService'
 import { gitService } from '../services/gitService'
-import { AppConfig, ProjectConfig } from '../types/config'
+import { AppConfig, ProjectConfig, PromptTemplate } from '../types/config'
 import { GitFileStatus, GitCommit } from '../../../preload/index.d'
 import TranslationDialog from './TranslationDialog'
+import PromptTemplateDialog from './PromptTemplateDialog'
 import './LeftPanel.css'
 
 interface LeftPanelProps {
@@ -30,6 +31,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   const [fileTypeFilter, setFileTypeFilter] = useState<string[]>([])
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['docs', 'guides']))
   const [isTranslationDialogOpen, setIsTranslationDialogOpen] = useState(false)
+  const [isPromptTemplateDialogOpen, setIsPromptTemplateDialogOpen] = useState(false)
   
   // 配置相关状态
   const [config, setConfig] = useState<AppConfig | null>(null)
@@ -412,6 +414,29 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
     // 翻译完成后刷新文件树
     if (activeProject) {
       loadFileTree(activeProject)
+    }
+  }
+
+  const handleOpenPromptTemplateDialog = () => {
+    setIsPromptTemplateDialogOpen(true)
+  }
+
+  const handleClosePromptTemplateDialog = () => {
+    setIsPromptTemplateDialogOpen(false)
+  }
+
+  const handleSelectTemplate = (template: PromptTemplate) => {
+    // 根据当前是否有活动项目，选择更新全局提示词还是项目提示词
+    if (activeProject) {
+      setSettingsForm(prev => ({
+        ...prev,
+        customPrompt: template.content
+      }))
+    } else {
+      setSettingsForm(prev => ({
+        ...prev,
+        globalPrompt: template.content
+      }))
     }
   }
 
@@ -861,6 +886,14 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
 
       <div className="settings-section">
         <h3>翻译提示词</h3>
+        <div className="prompt-template-actions">
+          <button 
+            className="btn btn-secondary btn-sm"
+            onClick={handleOpenPromptTemplateDialog}
+          >
+            📝 管理提示词模板
+          </button>
+        </div>
         <div className="setting-item">
           <label>全局提示词:</label>
           <textarea 
@@ -990,6 +1023,13 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         projectPath={activeProject?.path || ''}
         upstreamBranch={activeProject?.upstreamBranch || 'main'}
         workingBranch={activeProject?.workingBranch || 'main'}
+      />
+
+      {/* 提示词模板对话框 */}
+      <PromptTemplateDialog
+        isOpen={isPromptTemplateDialogOpen}
+        onClose={handleClosePromptTemplateDialog}
+        onSelectTemplate={handleSelectTemplate}
       />
     </div>
   )
