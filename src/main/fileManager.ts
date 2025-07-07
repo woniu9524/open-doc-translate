@@ -122,7 +122,7 @@ export class FileManager {
       const gitPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
         `git log -1 --format="%H" ${branch} -- "${gitPath}"`,
-        { cwd: projectPath }
+        { cwd: projectPath, maxBuffer: 1024 * 1024 } // 1MB 缓冲区
       )
       return stdout.trim() || null
     } catch (error) {
@@ -138,7 +138,7 @@ export class FileManager {
       const gitPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
         `git status --porcelain "${gitPath}"`,
-        { cwd: projectPath }
+        { cwd: projectPath, maxBuffer: 1024 * 1024 } // 1MB 缓冲区
       )
       return stdout.trim().length > 0
     } catch (error) {
@@ -152,7 +152,10 @@ export class FileManager {
     try {
       // 将路径标准化为 Git 兼容的正斜杠格式
       const gitPath = filePath.replace(/\\/g, '/')
-      await execAsync(`git cat-file -e ${branch}:"${gitPath}"`, { cwd: projectPath })
+      await execAsync(`git cat-file -e ${branch}:"${gitPath}"`, { 
+        cwd: projectPath, 
+        maxBuffer: 1024 * 1024 // 1MB 缓冲区
+      })
       return true
     } catch (error) {
       return false
@@ -524,7 +527,7 @@ export class FileManager {
       
       const { stdout } = await execAsync(
         `git ls-tree -r upstream/${upstreamBranch} ${dirArgs}`,
-        { cwd: projectPath }
+        { cwd: projectPath, maxBuffer: 10 * 1024 * 1024 } // 10MB 缓冲区用于大型仓库
       )
       
       // 解析 git ls-tree 输出
@@ -559,7 +562,7 @@ export class FileManager {
       const gitPath = filePath.replace(/\\/g, '/')
       const { stdout } = await execAsync(
         `git ls-tree ${branch} "${gitPath}"`,
-        { cwd: projectPath }
+        { cwd: projectPath, maxBuffer: 1024 * 1024 } // 1MB 缓冲区
       )
       
       const hashMatch = stdout.match(/^[0-9]+ blob ([a-f0-9]+)/)
@@ -578,7 +581,10 @@ export class FileManager {
     
     try {
       // 使用 git status --porcelain 获取所有修改的文件
-      const { stdout } = await execAsync('git status --porcelain', { cwd: projectPath })
+      const { stdout } = await execAsync('git status --porcelain', { 
+        cwd: projectPath, 
+        maxBuffer: 5 * 1024 * 1024 // 5MB 缓冲区用于状态输出
+      })
       
       const lines = stdout.trim().split('\n').filter(line => line.trim())
       
@@ -741,7 +747,36 @@ export class FileManager {
       if (branch) {
         // 从指定分支读取文件 - 将路径标准化为 Git 兼容的正斜杠格式
         const gitPath = filePath.replace(/\\/g, '/')
-        const { stdout } = await execAsync(`git show ${branch}:"${gitPath}"`, { cwd: projectPath })
+        
+        // 首先检查文件大小，如果太大则使用更大的缓冲区
+        let maxBuffer = 1024 * 1024 // 默认 1MB
+        
+        try {
+          // 获取文件大小
+          const { stdout: sizeOutput } = await execAsync(
+            `git cat-file -s ${branch}:"${gitPath}"`,
+            { cwd: projectPath, maxBuffer: 1024 * 1024 }
+          )
+          const fileSize = parseInt(sizeOutput.trim(), 10)
+          
+          // 根据文件大小调整缓冲区
+          if (fileSize > 10 * 1024 * 1024) { // 大于 10MB
+            maxBuffer = 50 * 1024 * 1024 // 50MB
+          } else if (fileSize > 5 * 1024 * 1024) { // 大于 5MB
+            maxBuffer = 20 * 1024 * 1024 // 20MB
+          } else if (fileSize > 1 * 1024 * 1024) { // 大于 1MB
+            maxBuffer = 10 * 1024 * 1024 // 10MB
+          }
+          
+          console.log(`文件 ${filePath} 大小: ${(fileSize / 1024 / 1024).toFixed(2)}MB，使用缓冲区: ${(maxBuffer / 1024 / 1024).toFixed(2)}MB`)
+        } catch (sizeError) {
+          console.warn(`无法获取文件 ${filePath} 大小，使用默认缓冲区:`, sizeError)
+        }
+        
+        const { stdout } = await execAsync(
+          `git show ${branch}:"${gitPath}"`,
+          { cwd: projectPath, maxBuffer }
+        )
         return stdout
       } else {
         // 从本地文件系统读取文件
@@ -750,6 +785,12 @@ export class FileManager {
       }
     } catch (error) {
       console.error(`读取文件 ${filePath} 失败:`, error)
+      
+      // 如果是缓冲区溢出错误，提供更详细的错误信息
+      if (error instanceof Error && 'code' in error && error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        throw new Error(`文件 ${filePath} 过大，无法读取。请考虑将大文件添加到 .gitignore 中或使用流式处理。`)
+      }
+      
       throw new Error(`无法读取文件: ${filePath}`)
     }
   }
