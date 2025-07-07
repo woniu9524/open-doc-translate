@@ -187,7 +187,7 @@ export class ConfigManager {
       upstreamBranch: defaultUpstreamBranch,
       workingBranch: defaultWorkingBranch,
       watchDirectories: ['docs', 'guides'],
-      fileTypes: ['.md', '.mdx', '.txt']
+      fileTypes: ['.md', '.mdx', '.ipynb']
     }
 
     this.config.projects.push(newProject)

@@ -5,6 +5,7 @@ import { promisify } from 'util'
 import ignore from 'ignore'
 import { LLMService } from './llmService'
 import { ConfigManager } from './config'
+import { NotebookProcessor } from './notebookProcessor'
 
 const execAsync = promisify(exec)
 
@@ -28,11 +29,13 @@ export interface FileStatus {
 export class FileManager {
   private statusCache: Map<string, FileStatus> = new Map()
   private llmService: LLMService
+  private notebookProcessor: NotebookProcessor
   private upstreamHashCache: Map<string, Map<string, string>> = new Map() // 缓存上游分支的文件哈希
   private gitignoreCache: Map<string, any> = new Map() // 缓存gitignore规则
 
   constructor(configManager: ConfigManager) {
     this.llmService = new LLMService(configManager)
+    this.notebookProcessor = new NotebookProcessor(this.llmService)
   }
 
   // 标准化路径分隔符 - 统一使用当前系统的路径分隔符
@@ -46,7 +49,9 @@ export class FileManager {
   }
 
   private getStatusFilePath(projectPath: string, workingBranch: string): string {
-    return join(projectPath, `.opendoc-${workingBranch}.json`)
+    // 对分支名称进行转义，将斜杠替换为下划线，避免路径问题
+    const safeBranchName = workingBranch.replace(/[\/\\]/g, '_')
+    return join(projectPath, `.opendoc-translate-${safeBranchName}.json`)
   }
 
   // 加载文件状态缓存
@@ -828,8 +833,37 @@ export class FileManager {
       // 获取原文内容
       const originalContent = await this.readFileContent(projectPath, filePath, `upstream/${upstreamBranch}`)
       
-      // 调用翻译服务
-      const translatedContent = await this.callLLMTranslation(originalContent, projectPath)
+      let translatedContent: string
+      
+      // 检查是否为 Jupyter Notebook 文件
+      if (NotebookProcessor.isNotebookFile(filePath)) {
+        console.log(`检测到 Jupyter Notebook 文件: ${filePath}，使用专门的处理器`)
+        
+        // 使用 Notebook 处理器进行翻译
+        const result = await this.notebookProcessor.translateNotebook(originalContent, projectPath)
+        
+        // 验证翻译后的 notebook 结构
+        const validation = this.notebookProcessor.validateNotebook(result.translatedNotebook)
+        if (!validation.isValid) {
+          console.warn(`Notebook 结构验证失败: ${validation.errors.join(', ')}`)
+        }
+        
+        // 转换为 JSON 字符串
+        translatedContent = this.notebookProcessor.stringifyNotebook(result.translatedNotebook)
+        
+        // 输出翻译统计信息
+        console.log(`Notebook 翻译完成: ${result.translatedCellsCount}/${result.totalMarkdownCells} 个 markdown 单元格翻译成功`)
+        
+        if (result.errors.length > 0) {
+          console.warn(`翻译过程中出现 ${result.errors.length} 个错误:`)
+          result.errors.forEach(error => {
+            console.warn(`  单元格 ${error.cellIndex}: ${error.error}`)
+          })
+        }
+      } else {
+        // 对于普通文件，使用标准翻译流程
+        translatedContent = await this.callLLMTranslation(originalContent, projectPath)
+      }
       
       // 保存翻译结果
       await this.saveFileContent(projectPath, filePath, translatedContent)
