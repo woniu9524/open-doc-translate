@@ -205,12 +205,67 @@
 
 .selected-types {
   margin-top: 8px;
-  padding: 6px 8px;
-  background-color: #eff6ff;
-  border: 1px solid #bfdbfe;
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 4px 8px;
   border-radius: 4px;
-  font-size: 13px;
-  color: #1e40af;
+}
+
+.file-name-filter {
+  margin-bottom: 12px;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.file-name-filter label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.name-filter-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.name-input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+}
+
+.name-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.name-input::placeholder {
+  color: #9ca3af;
+}
+
+.name-filter-inputs .btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.filter-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6b7280;
+  background-color: #f3f4f6;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 
 .selection-controls {

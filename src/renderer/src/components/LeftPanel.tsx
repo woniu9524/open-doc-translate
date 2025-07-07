@@ -29,6 +29,7 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
 }, ref) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'translated' | 'outdated' | 'untranslated'>('all')
   const [fileTypeFilter, setFileTypeFilter] = useState<string[]>([])
+  const [fileNameFilter, setFileNameFilter] = useState<string>('')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['docs', 'guides']))
   const [isTranslationDialogOpen, setIsTranslationDialogOpen] = useState(false)
   const [isPromptTemplateDialogOpen, setIsPromptTemplateDialogOpen] = useState(false)
@@ -97,6 +98,11 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
   // 重置文件类型筛选
   const resetFileTypeFilter = () => {
     setFileTypeFilter([])
+  }
+
+  // 重置文件名筛选
+  const resetFileNameFilter = () => {
+    setFileNameFilter('')
   }
 
   // 获取所有文件夹路径
@@ -495,7 +501,14 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
       const typeMatch = fileTypeFilter.length === 0 || 
         (fileExtension && fileTypeFilter.includes(`.${fileExtension}`))
       
-      return statusMatch && typeMatch
+      // 文件名筛选 - 支持多个关键词用逗号分隔
+      let nameMatch = true
+      if (fileNameFilter.trim()) {
+        const keywords = fileNameFilter.split(',').map(keyword => keyword.trim().toLowerCase()).filter(keyword => keyword)
+        nameMatch = keywords.some(keyword => file.name.toLowerCase().includes(keyword))
+      }
+      
+      return statusMatch && typeMatch && nameMatch
     }).map(file => ({
       ...file,
       children: file.children ? filterFiles(file.children) : undefined
@@ -596,6 +609,31 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
               )}
             </div>
           )}
+          
+          <div className="file-name-filter">
+            <label>文件名筛选:</label>
+            <div className="name-filter-inputs">
+              <input
+                type="text"
+                placeholder="输入文件名关键词，多个用逗号分隔"
+                value={fileNameFilter}
+                onChange={(e) => setFileNameFilter(e.target.value)}
+                className="name-input"
+              />
+              <button 
+                className="btn btn-sm btn-secondary"
+                onClick={resetFileNameFilter}
+                title="重置文件名筛选"
+              >
+                重置
+              </button>
+            </div>
+            {fileNameFilter.trim() && (
+              <div className="filter-hint">
+                搜索关键词: {fileNameFilter.split(',').map(keyword => keyword.trim()).filter(keyword => keyword).join(', ')}
+              </div>
+            )}
+          </div>
           
           <div className="action-buttons">
             <button 

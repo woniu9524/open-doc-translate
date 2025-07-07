@@ -46,6 +46,7 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'translated' | 'outdated' | 'untranslated'>('all')
   const [fileSizeFilter, setFileSizeFilter] = useState<{ min: number; max: number }>({ min: 0, max: Infinity })
   const [fileTypeFilter, setFileTypeFilter] = useState<string[]>([])
+  const [fileNameFilter, setFileNameFilter] = useState<string>('')
   const [progress, setProgress] = useState<TranslationProgress>({
     total: 0,
     completed: 0,
@@ -96,7 +97,14 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
         const typeMatch = fileTypeFilter.length === 0 || 
           (fileExtension && fileTypeFilter.includes(`.${fileExtension}`))
         
-        return statusMatch && sizeMatch && typeMatch
+        // 文件名筛选 - 支持多个关键词用逗号分隔
+        let nameMatch = true
+        if (fileNameFilter.trim()) {
+          const keywords = fileNameFilter.split(',').map(keyword => keyword.trim().toLowerCase()).filter(keyword => keyword)
+          nameMatch = keywords.some(keyword => item.name.toLowerCase().includes(keyword))
+        }
+        
+        return statusMatch && sizeMatch && typeMatch && nameMatch
       }).map(item => ({
         ...item,
         children: item.children ? filterRecursive(item.children) : undefined
@@ -198,6 +206,11 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
   // 重置文件大小筛选
   const resetFileSizeFilter = () => {
     setFileSizeFilter({ min: 0, max: Infinity })
+  }
+
+  // 重置文件名筛选
+  const resetFileNameFilter = () => {
+    setFileNameFilter('')
   }
 
   // 开始翻译
@@ -457,6 +470,31 @@ const TranslationDialog: React.FC<TranslationDialogProps> = ({
                   重置
                 </button>
               </div>
+            </div>
+            
+            <div className="file-name-filter">
+              <label>文件名筛选:</label>
+              <div className="name-filter-inputs">
+                <input
+                  type="text"
+                  placeholder="输入文件名关键词，多个用逗号分隔"
+                  value={fileNameFilter}
+                  onChange={(e) => setFileNameFilter(e.target.value)}
+                  className="name-input"
+                />
+                <button 
+                  className="btn btn-sm btn-secondary"
+                  onClick={resetFileNameFilter}
+                  title="重置文件名筛选"
+                >
+                  重置
+                </button>
+              </div>
+              {fileNameFilter.trim() && (
+                <div className="filter-hint">
+                  搜索关键词: {fileNameFilter.split(',').map(keyword => keyword.trim()).filter(keyword => keyword).join(', ')}
+                </div>
+              )}
             </div>
             
             <div className="selection-controls">

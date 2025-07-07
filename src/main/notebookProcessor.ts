@@ -78,8 +78,24 @@ export class NotebookProcessor {
    * 将翻译后的内容转换为单元格 source 格式
    */
   private formatTranslatedSource(translatedContent: string): string[] {
-    // 将翻译后的内容作为单个字符串放入数组中
-    return [translatedContent]
+    // 如果内容为空，返回空数组
+    if (!translatedContent) {
+      return ['']
+    }
+    
+    // 按照 \n 切割，但保留换行符
+    const lines = translatedContent.split('\n')
+    
+    // 为每行添加换行符，除了最后一行
+    return lines.map((line, index) => {
+      if (index === lines.length - 1) {
+        // 最后一行不添加换行符
+        return line
+      } else {
+        // 其他行都添加换行符
+        return line + '\n'
+      }
+    })
   }
 
   /**
