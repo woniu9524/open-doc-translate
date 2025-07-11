@@ -260,4 +260,80 @@ export class ConfigManager {
     if (!this.config.activeProjectPath) return undefined
     return this.config.projects.find(p => p.path === this.config.activeProjectPath)
   }
+
+  // 检查上游远程是否存在
+  async hasUpstreamRemote(projectPath: string): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync('git remote', { cwd: projectPath })
+      const remotes = stdout.trim().split('\n').map(line => line.trim())
+      return remotes.includes('upstream')
+    } catch (error) {
+      console.error('检查上游远程失败:', error)
+      return false
+    }
+  }
+
+  // 添加上游远程
+  async addUpstreamRemote(projectPath: string, upstreamUrl: string): Promise<void> {
+    try {
+      if (!upstreamUrl.trim()) {
+        throw new Error('上游仓库URL不能为空')
+      }
+
+      // 检查上游远程是否已存在
+      const hasUpstream = await this.hasUpstreamRemote(projectPath)
+      if (hasUpstream) {
+        // 如果已存在，更新URL
+        await execAsync(`git remote set-url upstream "${upstreamUrl}"`, { cwd: projectPath })
+        console.log(`更新上游远程URL: ${upstreamUrl}`)
+      } else {
+        // 如果不存在，添加新的上游远程
+        await execAsync(`git remote add upstream "${upstreamUrl}"`, { cwd: projectPath })
+        console.log(`添加上游远程: ${upstreamUrl}`)
+      }
+
+      // 更新项目配置中的上游URL
+      await this.updateProject(projectPath, { upstreamUrl })
+    } catch (error) {
+      console.error('配置上游远程失败:', error)
+      throw new Error('配置上游远程失败: ' + (error as Error).message)
+    }
+  }
+
+  // 获取上游远程URL
+  async getUpstreamUrl(projectPath: string): Promise<string> {
+    try {
+      const { stdout } = await execAsync('git remote get-url upstream', { cwd: projectPath })
+      return stdout.trim()
+    } catch (error) {
+      console.error('获取上游远程URL失败:', error)
+      return ''
+    }
+  }
+
+  // 验证上游远程连接
+  async validateUpstreamRemote(projectPath: string): Promise<boolean> {
+    try {
+      // 尝试列出上游远程的引用
+      await execAsync('git ls-remote upstream', { cwd: projectPath, timeout: 10000 })
+      return true
+    } catch (error) {
+      console.error('验证上游远程连接失败:', error)
+      return false
+    }
+  }
+
+  // 删除上游远程
+  async removeUpstreamRemote(projectPath: string): Promise<void> {
+    try {
+      await execAsync('git remote remove upstream', { cwd: projectPath })
+      console.log('删除上游远程')
+      
+      // 更新项目配置，清空上游URL
+      await this.updateProject(projectPath, { upstreamUrl: '' })
+    } catch (error) {
+      console.error('删除上游远程失败:', error)
+      throw new Error('删除上游远程失败: ' + (error as Error).message)
+    }
+  }
 } 

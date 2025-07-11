@@ -199,4 +199,96 @@ export class GitService {
       return ''
     }
   }
+
+  // 获取所有远程仓库
+  async getRemotes(projectPath: string): Promise<{ name: string; url: string }[]> {
+    try {
+      const { stdout } = await execAsync('git remote -v', { cwd: projectPath })
+      const remotes: { name: string; url: string }[] = []
+      const lines = stdout.trim().split('\n').filter(line => line.trim())
+      
+      for (const line of lines) {
+        const match = line.match(/^(\w+)\s+(.+?)\s+\(fetch\)$/)
+        if (match) {
+          const [, name, url] = match
+          remotes.push({ name, url })
+        }
+      }
+      
+      return remotes
+    } catch (error) {
+      console.error('获取远程仓库列表失败:', error)
+      return []
+    }
+  }
+
+  // 检查远程仓库是否存在
+  async hasRemote(projectPath: string, remoteName: string): Promise<boolean> {
+    try {
+      const { stdout } = await execAsync('git remote', { cwd: projectPath })
+      const remotes = stdout.trim().split('\n').map(line => line.trim())
+      return remotes.includes(remoteName)
+    } catch (error) {
+      console.error(`检查远程仓库失败 (${remoteName}):`, error)
+      return false
+    }
+  }
+
+  // 添加远程仓库
+  async addRemote(projectPath: string, remoteName: string, remoteUrl: string): Promise<void> {
+    try {
+      if (!remoteUrl.trim()) {
+        throw new Error('远程仓库URL不能为空')
+      }
+
+      // 检查远程是否已存在
+      const exists = await this.hasRemote(projectPath, remoteName)
+      if (exists) {
+        throw new Error(`远程仓库 ${remoteName} 已存在`)
+      }
+
+      await execAsync(`git remote add ${remoteName} "${remoteUrl}"`, { cwd: projectPath })
+      console.log(`成功添加远程仓库: ${remoteName} -> ${remoteUrl}`)
+    } catch (error) {
+      console.error(`添加远程仓库失败 (${remoteName}):`, error)
+      throw new Error(`添加远程仓库失败: ${(error as Error).message}`)
+    }
+  }
+
+  // 更新远程仓库URL
+  async setRemoteUrl(projectPath: string, remoteName: string, remoteUrl: string): Promise<void> {
+    try {
+      if (!remoteUrl.trim()) {
+        throw new Error('远程仓库URL不能为空')
+      }
+
+      await execAsync(`git remote set-url ${remoteName} "${remoteUrl}"`, { cwd: projectPath })
+      console.log(`成功更新远程仓库URL: ${remoteName} -> ${remoteUrl}`)
+    } catch (error) {
+      console.error(`更新远程仓库URL失败 (${remoteName}):`, error)
+      throw new Error(`更新远程仓库URL失败: ${(error as Error).message}`)
+    }
+  }
+
+  // 删除远程仓库
+  async removeRemote(projectPath: string, remoteName: string): Promise<void> {
+    try {
+      await execAsync(`git remote remove ${remoteName}`, { cwd: projectPath })
+      console.log(`成功删除远程仓库: ${remoteName}`)
+    } catch (error) {
+      console.error(`删除远程仓库失败 (${remoteName}):`, error)
+      throw new Error(`删除远程仓库失败: ${(error as Error).message}`)
+    }
+  }
+
+  // 拉取指定远程仓库
+  async fetch(projectPath: string, remoteName: string = 'upstream'): Promise<void> {
+    try {
+      await execAsync(`git fetch ${remoteName}`, { cwd: projectPath })
+      console.log(`成功拉取远程仓库: ${remoteName}`)
+    } catch (error) {
+      console.error(`拉取远程仓库失败 (${remoteName}):`, error)
+      throw new Error(`拉取远程仓库失败: ${(error as Error).message}`)
+    }
+  }
 } 

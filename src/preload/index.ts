@@ -16,7 +16,13 @@ const api = {
     getActiveProject: () => ipcRenderer.invoke('config:get-active-project'),
     getBranches: (projectPath: string) => ipcRenderer.invoke('config:get-branches', projectPath),
     fetchUpstream: (projectPath: string) => ipcRenderer.invoke('config:fetch-upstream', projectPath),
-    checkoutBranch: (projectPath: string, branch: string) => ipcRenderer.invoke('config:checkout-branch', projectPath, branch)
+    checkoutBranch: (projectPath: string, branch: string) => ipcRenderer.invoke('config:checkout-branch', projectPath, branch),
+    // 上游远程管理
+    hasUpstreamRemote: (projectPath: string) => ipcRenderer.invoke('config:has-upstream-remote', projectPath),
+    addUpstreamRemote: (projectPath: string, upstreamUrl: string) => ipcRenderer.invoke('config:add-upstream-remote', projectPath, upstreamUrl),
+    getUpstreamUrl: (projectPath: string) => ipcRenderer.invoke('config:get-upstream-url', projectPath),
+    validateUpstreamRemote: (projectPath: string) => ipcRenderer.invoke('config:validate-upstream-remote', projectPath),
+    removeUpstreamRemote: (projectPath: string) => ipcRenderer.invoke('config:remove-upstream-remote', projectPath)
   },
   files: {
     getFileTree: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => 

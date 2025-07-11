@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { configService } from '../services/configService'
 import { fileService } from '../services/fileService'
+import { gitService } from '../services/gitService'
 import { ProjectConfig } from '../types/config'
 import './TopToolbar.css'
 
@@ -143,35 +144,65 @@ const TopToolbar: React.FC<TopToolbarProps> = ({ onFileTreeRefresh }) => {
   }
 
   const handleWorkingBranchChange = async (branch: string) => {
+    if (!activeProject) return
+    
+    // 检查是否有未提交的修改
+    try {
+      const hasUncommitted = await gitService.hasUncommittedChanges(activeProject.path)
+      if (hasUncommitted) {
+        const shouldContinue = confirm(
+          `当前工作区有未提交的修改，切换分支可能会丢失这些修改。\n\n` +
+          `建议您先：\n` +
+          `1. 提交当前修改（推荐）\n` +
+          `2. 或暂存当前修改\n\n` +
+          `是否仍要强制切换分支？`
+        )
+        if (!shouldContinue) {
+          return
+        }
+      }
+    } catch (error) {
+      console.error('检查未提交修改失败:', error)
+      // 如果检查失败，询问用户是否继续
+      const shouldContinue = confirm(
+        `无法检查当前工作区的修改状态。\n\n` +
+        `这可能是因为：\n` +
+        `1. Git 仓库状态异常\n` +
+        `2. 权限问题\n\n` +
+        `是否继续切换分支？`
+      )
+      if (!shouldContinue) {
+        return
+      }
+    }
+
     setWorkingBranch(branch)
-    if (activeProject) {
-      try {
-        // 清除分支相关缓存
-        await fileService.clearBranchCache(activeProject.path, activeProject.workingBranch, activeProject.upstreamBranch)
-        
-        // 先切换Git分支
-        await configService.checkoutBranch(activeProject.path, branch)
-        
-        // 然后更新配置
-        await configService.updateProject(activeProject.path, {
-          workingBranch: branch
-        })
-        
-        // 通知文件树刷新
-        if (onFileTreeRefresh) {
-          onFileTreeRefresh()
-        }
-        
-        console.log(`成功切换到分支: ${branch}`)
-      } catch (error) {
-        console.error('切换工作分支失败:', error)
-        alert('切换工作分支失败: ' + (error as Error).message)
-        
-        // 如果切换失败，恢复到之前的分支选择
-        const project = activeProject
-        if (project) {
-          setWorkingBranch(project.workingBranch)
-        }
+    try {
+      // 清除分支相关缓存
+      await fileService.clearBranchCache(activeProject.path, activeProject.workingBranch, activeProject.upstreamBranch)
+      
+      // 先切换Git分支
+      await configService.checkoutBranch(activeProject.path, branch)
+      
+      // 然后更新配置
+      await configService.updateProject(activeProject.path, {
+        workingBranch: branch
+      })
+      
+      // 通知文件树刷新
+      if (onFileTreeRefresh) {
+        onFileTreeRefresh()
+      }
+      
+      console.log(`成功切换到分支: ${branch}`)
+    } catch (error) {
+      console.error('切换工作分支失败:', error)
+      alert('切换工作分支失败: ' + (error as Error).message)
+      
+      // 如果切换失败，恢复到之前的分支选择
+      const project = activeProject
+      if (project) {
+        setWorkingBranch(project.workingBranch)
       }
     }
   }

@@ -55,6 +55,29 @@ export class ConfigService {
     await window.api.config.checkoutBranch(projectPath, branch)
   }
 
+  // 上游远程管理
+  async hasUpstreamRemote(projectPath: string): Promise<boolean> {
+    return await window.api.config.hasUpstreamRemote(projectPath)
+  }
+
+  async addUpstreamRemote(projectPath: string, upstreamUrl: string): Promise<void> {
+    await window.api.config.addUpstreamRemote(projectPath, upstreamUrl)
+    await this.loadConfig() // 重新加载配置以获取最新状态
+  }
+
+  async getUpstreamUrl(projectPath: string): Promise<string> {
+    return await window.api.config.getUpstreamUrl(projectPath)
+  }
+
+  async validateUpstreamRemote(projectPath: string): Promise<boolean> {
+    return await window.api.config.validateUpstreamRemote(projectPath)
+  }
+
+  async removeUpstreamRemote(projectPath: string): Promise<void> {
+    await window.api.config.removeUpstreamRemote(projectPath)
+    await this.loadConfig()
+  }
+
   getConfig(): AppConfig | null {
     return this.config
   }

@@ -332,6 +332,9 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
             fileTypes: active.fileTypes.join(', ')
           }))
           
+          // 检查实际的上游远程URL并更新配置
+          checkAndUpdateUpstreamUrl(active)
+          
           // 加载文件树
           await loadFileTree(active)
         }
@@ -443,6 +446,44 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
         ...prev,
         globalPrompt: template.content
       }))
+    }
+  }
+
+  // 配置上游远程
+  const handleConfigureUpstream = async () => {
+    if (!activeProject || !settingsForm.upstreamUrl.trim()) {
+      alert('请先输入上游仓库URL')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await configService.addUpstreamRemote(activeProject.path, settingsForm.upstreamUrl.trim())
+      alert('上游远程配置成功！您现在可以使用 git fetch upstream 拉取上游更新。')
+    } catch (error) {
+      console.error('配置上游远程失败:', error)
+      alert('配置上游远程失败: ' + (error as Error).message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // 检查并更新上游远程URL
+  const checkAndUpdateUpstreamUrl = async (project: ProjectConfig) => {
+    try {
+      const actualUpstreamUrl = await configService.getUpstreamUrl(project.path)
+      if (actualUpstreamUrl && actualUpstreamUrl !== project.upstreamUrl) {
+        // 如果实际的上游URL与配置中的不一致，更新表单
+        setSettingsForm(prev => ({
+          ...prev,
+          upstreamUrl: actualUpstreamUrl
+        }))
+        
+        // 同时更新项目配置
+        await configService.updateProject(project.path, { upstreamUrl: actualUpstreamUrl })
+      }
+    } catch (error) {
+      console.error('检查上游远程URL失败:', error)
     }
   }
 
@@ -984,6 +1025,18 @@ const LeftPanel = forwardRef<LeftPanelRef, LeftPanelProps>(({
               value={settingsForm.upstreamUrl}
               onChange={(e) => handleFormChange('upstreamUrl', e.target.value)}
             />
+            <div className="upstream-actions">
+              <button 
+                className="btn btn-sm btn-secondary"
+                onClick={handleConfigureUpstream}
+                disabled={!settingsForm.upstreamUrl.trim() || isSaving}
+              >
+                配置上游远程
+              </button>
+            </div>
+            <small className="help-text">
+              设置上游仓库URL后，点击"配置上游远程"执行 git remote add upstream 命令
+            </small>
           </div>
           <div className="setting-item">
             <label>监听目录:</label>

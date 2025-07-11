@@ -113,6 +113,29 @@ app.whenReady().then(async () => {
     return true
   })
 
+  // 上游远程管理 IPC handlers
+  ipcMain.handle('config:has-upstream-remote', async (_, projectPath) => {
+    return await configManager.hasUpstreamRemote(projectPath)
+  })
+
+  ipcMain.handle('config:add-upstream-remote', async (_, projectPath, upstreamUrl) => {
+    await configManager.addUpstreamRemote(projectPath, upstreamUrl)
+    return true
+  })
+
+  ipcMain.handle('config:get-upstream-url', async (_, projectPath) => {
+    return await configManager.getUpstreamUrl(projectPath)
+  })
+
+  ipcMain.handle('config:validate-upstream-remote', async (_, projectPath) => {
+    return await configManager.validateUpstreamRemote(projectPath)
+  })
+
+  ipcMain.handle('config:remove-upstream-remote', async (_, projectPath) => {
+    await configManager.removeUpstreamRemote(projectPath)
+    return true
+  })
+
   // IPC handlers for file management
   ipcMain.handle('files:get-file-tree', async (_, projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch) => {
     return await fileManager.getFileTree(projectPath, watchDirectories, fileTypes, upstreamBranch, workingBranch)

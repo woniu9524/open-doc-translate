@@ -30,6 +30,12 @@ declare global {
         getBranches: (projectPath: string) => Promise<{ local: string[], remote: string[] }>
         fetchUpstream: (projectPath: string) => Promise<boolean>
         checkoutBranch: (projectPath: string, branch: string) => Promise<boolean>
+        // 上游远程管理
+        hasUpstreamRemote: (projectPath: string) => Promise<boolean>
+        addUpstreamRemote: (projectPath: string, upstreamUrl: string) => Promise<boolean>
+        getUpstreamUrl: (projectPath: string) => Promise<string>
+        validateUpstreamRemote: (projectPath: string) => Promise<boolean>
+        removeUpstreamRemote: (projectPath: string) => Promise<boolean>
       }
       files: {
         getFileTree: (projectPath: string, watchDirectories: string[], fileTypes: string[], upstreamBranch: string, workingBranch: string) => Promise<FileItem[]>

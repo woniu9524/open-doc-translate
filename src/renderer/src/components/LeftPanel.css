@@ -633,9 +633,21 @@
 }
 
 .prompt-template-actions {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+/* 上游远程配置样式 */
+.upstream-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.upstream-actions .btn {
+  white-space: nowrap;
 }
 
 .settings-actions .btn {
